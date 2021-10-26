@@ -87,7 +87,7 @@
 
 通常情况下回归任务的首选性能指标就是**均方根误差，RMSE**，但是针对较多异常区域的情况下，可考虑使用**平均绝对误差**（Mean Absolute Error, MAE）。
 
-![图4_平均绝对误差MAE]()
+![图4_平均绝对误差MAE](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter2/%E5%9B%BE4_%E5%B9%B3%E5%9D%87%E7%BB%9D%E5%AF%B9%E8%AF%AF%E5%B7%AEMAE.jpg)
 
 RMSE和MAE都是测量两个向量（预测值向量和目标值向量）之间距离的方法。各种距离度量或范数是可能的：
 
@@ -97,7 +97,7 @@ RMSE和MAE都是测量两个向量（预测值向量和目标值向量）之间�
 
 - 一般而言，包含n个元素的向量v的ℓk范数定义为如下式所示，ℓ0给出了向量中的非零元素数量， ℓ∞给出向量中的最大绝对值。
 
-    ![图5_k范数定义公式]()
+    ![图5_k范数定义公式](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter2/%E5%9B%BE5_k%E8%8C%83%E6%95%B0%E5%AE%9A%E4%B9%89%E5%85%AC%E5%BC%8F.jpg)
 
 - 范数指标越高，它越关注大值而忽略小值。这就是RMSE对异常值比MAE更敏感的原因。但是，当离群值呈指数形式稀有时（如钟形曲线），RMSE表现非常好，通常是首选。
 
@@ -200,3 +200,109 @@ RMSE和MAE都是测量两个向量（预测值向量和目标值向量）之间�
 
 ### 2.3.4 创建测试集
 
+当本人来浏览测试集数据时，很可能会陷入某个看似有趣的测试数据模式，进而选择某个特殊的机器学习模式，从而会导致再使用测试集对泛化误差率进行估算时，估计结果将会过于乐观，该系统启动后表现将不如预期优秀，这称为**数据窥探偏误**（data snooping bias）。
+
+理论上，创建测试集非常简单，只需要随机选择一些实例，通常是**数据集的20%**（如
+果数据集很大，比例将更小）：
+
+```python
+    # 创建测试集
+    # For illustration only. Sklearn has train_test_split()
+    def split_train_test(data, test_ratio):
+        shuffled_indices = np.random.permutation(len(data))
+        test_set_size = int(len(data) * test_ratio)
+        test_indices = shuffled_indices[:test_set_size]
+        train_indices = shuffled_indices[test_set_size:]
+        return data.iloc[train_indices], data.iloc[test_indices]
+```
+
+更理想的，通常是每个实例都使用一个标识符来决定是否进入测试集，以确保稳定的训练-测试分割。
+
+```python
+    from zlib import crc32
+
+    def test_set_check(identifier, test_ratio):
+        return crc32(np.int64(identifier)) & 0xffffffff < test_ratio * 2 ** 32
+
+    def split_train_test_by_id(data, test_ratio, id_column):
+        ids = data[id_column]
+        in_test_set = ids.apply(lambda id_ : test_set_check(id_, test_ratio))
+        return data.loc[~in_test_set], data.loc[in_test_set]
+```
+
+不幸的是，housing数据集没有标识符列。最简单的解决方法是使用行索引作为ID：
+
+```python
+    # 更简单的是使用行索引作为ID
+    housing_with_id = housing.reset_index() # add an 'index' column
+    train_set, test_set = split_train_test_by_id(housing_with_id, 0.2, "index")
+```
+
+如果使用行索引作为唯一标识符，需要确保在数据集的末尾添加新数据，并且不会删除任何行。如果不能保证这一点，那么你可以尝试使用某个最稳定的特征来创建唯一标识符。例如，一个区域的经纬度肯定几百万年都不会变，你可以将它们组合成如下的ID。
+
+```python
+    # 以特定数据组合为id
+    housing_with_id["id"] = housing["longitude"] * 1000 + housing["latitude"]
+    train_set, test_set = split_train_test_by_id(housing_with_id, 0.2, "id")
+```
+
+Scikit-Learn提供了一些函数，可以通过多种方式将数据集分成多个子集。最简单的函数是`train_test_split()`，除了几个额外特征,它与前面定义的函数plit_train_test()几乎相同。首先，它也有random_state参数，可以像之前提到过的那样设置随机生成器种子；其次，可以把行数相同的多个数据集一次性发送给它，它会根据相同的索引将其分：
+
+```python
+    from sklearn.model_selection import train_test_split
+    train_set, test_set = train_test_split(housing, test_size=0.2, random_state=42)
+```
+
+当数据集足够大时，上述的**随机抽样**方法可能会导致明显的抽样偏差。更多时可能需要采用**分层抽样**。
+
+假如已知，要预测房价中位数，收入中位数是一个非常重要的属性。于是需要在“收入”属性上，使得测试集能够代表整个数据集中各种不同类型的收入。首先，需要创建一个”收入类别“的属性，以收入中位数直方图为例：
+
+```python
+    housing["income_cat"] = pd.cut(housing["median_income"],     bins=[0.,1.5,3.0,4.5,6., np.inf],labels=[1, 2, 3, 4, 5])
+    housing["income_cat"].hist()
+```
+
+通过收入直方图可以看出，大多数收入中位数值聚集在1.5～6（15000～60000美元）左右，但也有一部分远远超过了6万美元。**在数据集中，每一层都要有足够数量的实例，这一点至关重要，不然数据不足的层，其重要程度很有可能会被错估。**
+
+上述，利用pd.cut()函数，创建5个收入类别的属性，0~1.5是类别1，1.5~3是类别2，以此类推。
+
+然后再根据收入类别进行分层抽样：
+
+```python
+    from sklearn.model_selection import StratifiedShuffleSplit
+    split = StratifiedShuffleSplit(n_splits=1, test_size=0.2,random_state=42)
+    for train_index, test_index in split.split(housing, housing["income_cat"]):
+        strat_train_set = housing.loc[train_index]
+        strat_test_set = housing.loc[test_index]
+    strat_test_set["income_cat"].value_counts() / len(strat_test_set)
+```
+
+通过比较，可得到在三种不同的数据集（完整数据集、分层抽样的测试集、纯随机抽样的测试集）中收入类别比例分布。
+
+```python
+    # 查看完整数据集、分层抽样的测试集、纯随机抽样的测试集中收入类别比例分布：
+    def income_cat_proportions(data):
+        return data["income_cat"].value_counts() / len(data)
+
+    train_set, test_set = train_test_split(housing, test_size = 0.2, random_state=42)
+
+    compare_props = pd.DataFrame({
+        "Overall": income_cat_proportions(housing),
+        "Stratified":income_cat_proportions(strat_test_set),
+        "Random":income_cat_proportions(test_set),
+    }).sort_index()
+
+    compare_props["Rand. %error"] = 100 * compare_props["Random"] / compare_props["Overall"] - 100
+    compare_props["Strat. %error"] = 100 * compare_props["Stratified"] / compare_props["Overall"] - 100
+```
+
+可以看出，分层抽样的测试集中的比例分布与完整数据集中的分布几乎一致，而纯随机抽样的测试集结果则是有偏的。
+
+最后删除income_cat属性，将数据恢复原样：
+
+```python
+    for set_ in (strat_train_set, strat_test_set):
+        set_.drop("income_cat", axis=1, inplace=True)
+```
+
+## 2.4 从数据探索和可视化中获得洞见
