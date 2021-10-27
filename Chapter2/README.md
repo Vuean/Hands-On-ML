@@ -306,3 +306,120 @@ Scikit-Learn提供了一些函数，可以通过多种方式将数据集分成�
 ```
 
 ## 2.4 从数据探索和可视化中获得洞见
+
+在此阶段，将从快速浏览数据的基础上更深入地了解数据。
+
+当如果训练集非常庞大，可以抽样一个探索集，这样后面的操作更简单快捷一些。首先，创建一个数据副本，保证可以随便尝试而不损害训练集：
+
+```python
+    # 创建数据副本
+    housing = strat_train_set.copy()
+```
+
+### 2.4.1 将地理数据可视化
+
+由于存在地理位置信息（经度和纬度），因此建立一个各区域的分布图以便于可视化数据是一个很好的想法：
+
+```python
+    # 可视化地理位置信息
+    housing.plot(kind="scatter", x = "longitude", y = "latitude")
+```
+
+![图6_数据的地理散点图]()
+
+将alpha选项设置为0.1（**调节透明度**），可以更清楚地看出高密度数据点的位置：
+
+```python
+    # 美化图片，设置透明度
+    housing.plot(kind="scatter", x="longitude", y="latitude",alpha=0.1)
+```
+
+![图7_突出高密度区域的地理散点图]()
+
+从优化后的可视化图中可以清楚地分辨出高密度区域，如湾区、洛杉矶和圣地亚哥附近等。进一步地，再通过可视化工具，展现房价信息。使用jet工具来预定义颜色表（选项cmap）
+来进行可视化，颜色范围从蓝（低）到红（高）。
+
+```python
+    # 房价可视化
+    housing.plot(kind = "scatter",x="longitude", y="latitude", alpha=0.4,
+                            s=housing["population"]/100,label="population",figsize=(10,7),
+                            c = "median_house_value", cmap=plt.get_cmap("jet"),colorbar=True,)
+    plt.legend()
+```
+
+![图8_人口-收入房价图]()
+
+从上图中可以看出，房价与地理位置（例如靠海）、人口密度息息相关。一个通常很有用的方法是使用**聚类算法**来检测主集群，然后再为各个集群中心添加一个新的衡量邻近距离的特征。海洋邻近度可能就是一个很有用的属性，不过在北加州，沿海地区的房价并不是太高，所以这个简单的规则也不是万能的。
+
+### 2.4.2 寻找相关性
+
+针对少量数据集，可以使用corr()方法轻松计算出每对属性之间的标准相关系数（也称为皮尔逊r）：
+
+```python
+    # 使用corr()方法轻松计算出每对属性之间的标准相关系数
+    corr_matrix = housing.corr()
+
+    # 查看每个属性与房价的相关性：
+    corr_matrix["median_house_value"].sort_values(ascending=False)
+
+    # 结果：
+    median_house_value    1.000000
+    median_income         0.687160
+    total_rooms           0.135097
+    housing_median_age    0.114110
+    households            0.064506
+    total_bedrooms        0.047689
+    population           -0.026920
+    longitude            -0.047432
+    latitude             -0.142724
+    Name: median_house_value, dtype: float64
+```
+
+相关系数的范围从-1变化到1。越接近1，表示有越强的正相关。当系数接近于-1时，表示有较强的负相关。**相关系数仅测量线性相关性（“如果x上升，则y上升/下降”）。所以有可能彻底遗漏非线性相关性（例如“如果x接近于0，则y会上升”）**。
+
+还有一种方法可以检测属性之间的相关性，就是使用pandas的scatter_matrix函数，它会绘制出每个数值属性相对于其他数值属性的相关性。现在我们有11个数值属性，可以得到11^2=121个图像，篇幅原因无法完全展示，这里我们仅关注那些与房价中位数属性最相关的，可算作是最有潜力的属性：
+
+```python
+    # 绘制每个数值属性相对于其他数值属性的相关性
+from pandas.plotting import scatter_matrix
+
+    attributes = ["median_house_value", "median_income", "total_rooms","housing_median_age"]
+
+    scatter_matrix(housing[attributes], figsize=(12,8))
+
+    # 如果pandas绘制每个变量对自身的图像，那么主对角线（从左上到右下）将全都是直线，
+    # 这样毫无意义。所以取而代之的方法是，pandas在这几个图中显示了每个属性的直方图
+```
+
+![图9_属性间散布矩阵图]()
+
+从图中可以看出，最有潜力能够预测房价中位数的属性是收入中位数，放大观测其相关性：
+
+```python
+
+```
+
+![图10_收入中位数与房价中位数]()
+
+从图中可以看出，首先，二者的相关性确实很强，可以清楚地看到上升的趋势，并且点也不是太分散。其次，前面提到过50万美元的价格上限在图中是一条清晰的水平线，不过除此之外，上图还显示出几条不那么明显的直线：45万美元附近有一条水平线，35万美元附近也有一条，28万美元附近似乎隐约也有一条，再往下可能还有一些。为了避免你的算法学习之后重现这些怪异数据，你可能会尝试删除这些相应区域。
+
+### 2.4.3 实验不同属性的组合
+
+在准备开始给机器学习算法输入数据之前，可能识别出了一些异常数据，**需要提前清理掉**。
+
+在准备给机器学习算法输入数据之前，最后一件需要做的事情就是：尝试各种属性的组合。例如，如果不知道一个区域有多少个家庭，那么知道一个区域的“房间总数”也没什么用。而真正想要知道的是一个家庭的房间数量。同样，单看“卧室总数”这个属性本身也没什么意义，可能想拿它和“房间总数”来对比，或者拿来同“每个家庭的人口数”这个属性组合似乎也挺有意思。来试着创建这些新属性：
+
+```python
+    # 组合新属性
+    housing["rooms_per_household"] = housing["total_rooms"] / housing["households"]
+    housing["bedrooms_per_room"] = housing["total_bedrooms"] / housing["total_rooms"]
+    housing["population_per_household"] = housing["population"] / housing["households"]
+
+    # 查看相关矩阵
+    corr_matrix = housing.corr()
+    corr_matrix["median_house_value"].sort_values(ascending = False)
+```
+
+从结果可以看出，新属性bedrooms_per_room较之“房间总数”或“卧室总数”与房价中位数的相关性都要高得多。显然，卧室/房间比例更低的房屋往往价格更贵。
+
+## 2.5 机器学习算法的数据准备
