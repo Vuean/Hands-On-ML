@@ -423,3 +423,103 @@ from pandas.plotting import scatter_matrix
 从结果可以看出，新属性bedrooms_per_room较之“房间总数”或“卧室总数”与房价中位数的相关性都要高得多。显然，卧室/房间比例更低的房屋往往价格更贵。
 
 ## 2.5 机器学习算法的数据准备
+
+在为机器学习算法准备数据的过程中，可自行编写函数来执行，这样一来可以实现：
+
+- 在任何数据集上轻松重现这些转换；
+
+- 建立起一个转换函数的函数库；
+
+- 在实时系统中使用这些函数来转换新数据，再输入给算法；
+
+- 尝试多种转换方式，查看哪种转换的组合效果最佳。
+
+再次，回到一个干净的训练集（再次复制strat_train_set），然后将预测器和标签分开。drop()函数会建一个数据副本，但是不影响原始数据。
+
+```python
+    # 准备训练集：
+    housing = strat_train_set.drop("median_house_value", axis=1)
+    housing_labels = strat_train_set["median_house_value"].copy()
+```
+
+### 2.5.1 数据清洗
+
+大部分的机器学习算法无法在缺失的特征上工作，所以我们要创建一些函数来辅助它。在数据展示阶段，已经注意到total_bedrooms属性有部分值缺失，所以必须要解决它。有以下三种选择：
+
+- 放弃这些区域；
+
+- 放弃整个属性；
+
+- 将确实的值设置为某个值（0、平均数或中位数等）
+
+通过DataFrame的dropna()、drop()和fillna()方法，可以轻松完成这些操作：
+
+```python
+    # 处理缺失数据
+
+    housing.dropna(subset=["total_bedrooms"])       # 放弃相应区域
+
+    housing.drop("total_bedrooms", axis=1)              # 放弃整个属性
+
+    median = housing["total_bedrooms"].median()     # 设置为某个值（0、平均数、中位数等）
+    housing["total_bedrooms"].fillna(median, inplace=True)
+```
+
+Scikit-Learn提供了一个非常容易上手的类来处理缺失值：`SimpleImputer`。使用方法如下：首先，需要创建一个SimpleImputer实例，指定要用属性的中位数值替换该属性的缺失值：
+
+```python
+    from sklearn.impute import SimpleImputer
+    imputer = SimpleImputer(strategy="median")
+```
+
+由于中位数值只能在数值属性上计算，所以我们需要创建一个没有文本属性ocean_proximity的数据副本：
+
+```python
+    housing_num = housing.drop("ocean_proximity", axis=1)
+```
+
+使用fit()方法将imputer实例适配到训练数据：
+
+```python
+    imputer.fit(housing_num)
+```
+
+这里imputer仅仅只是计算了每个属性的中位数值，并将结果存储在其实例变量statistics_中。虽然只有total_bedrooms这个属性存在缺失值，但是我们无法确认系统启动之后新数据中是否一定不存在任何缺失值，所以稳妥起见，还是将imputer应用于所有的数值属性：
+
+```python
+    >>> imputer.statistics_
+    array([-118.51  ,   34.26  ,   29.    , 2119.5   ,  433.    , 1164.    , 408.    ,    3.5409])
+
+    >>> housing_num.median().values
+    array([-118.51  ,   34.26  ,   29.    , 2119.5   ,  433.    , 1164.    , 408.    ,    3.5409])
+```
+
+使用imputer将缺失值替换成中位数值从而完成训练集转换：
+
+```python
+    X = imputer.transform(housing_num)
+```
+
+结果是一个包含转换后特征的NumPy数组。如果想将它放回pandas DataFrame，也很简单：
+
+```python
+    housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
+```
+
+### 2.5.2 处理文本和分类属性
+
+处理完数值属性后，再处理文本属性。在本例中，仅ocean_proximity属性为文本类，并且通过观察可知该属性的取值是有限个可能的取值，为分类属性。通常可以将分类属性转换为数字，可通过Scikit-Learn的OrdinalEncoder类：
+
+```python
+    from sklearn.preprocessing import OrdinalEncoder
+    oridinal_encoder = OrdinalEncoder()
+    housing_cat_encoded = oridinal_encoder.fit_transform(housing_cat)
+    housing_cat_encoded[:10]
+```
+
+使用Categories_实例变量获取类别列表。这个列表包含每个类别属性的一维数组（在这种情况下，这个列表包含一个数组，因为只有一个类别属性）：
+
+```python
+    # 使用Categories_实例变量获取类别列表
+    oridinal_encoder.categories_
+```
