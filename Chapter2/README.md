@@ -523,3 +523,22 @@ Scikit-Learn提供了一个非常容易上手的类来处理缺失值：`SimpleI
     # 使用Categories_实例变量获取类别列表
     oridinal_encoder.categories_
 ```
+
+但是这种表征方式产生的一个问题是，机器学习算法会认为两个相近的值比两个离得较远的值更为相似一些。新的属性有时候称为**哑（dummy）属性**。Scikit-Learn提供了一个OneHotEncoder编码器，可以将整数类别值转换为独热向量。我们用它来将类别编码为独热向量。
+
+独热编码即 One-Hot 编码，又称一位有效编码，其方法是使用N位状态寄存器来对N个状态进行编码，每个状态都由他独立的寄存器位，并且在任意时候，其中只有一位有效。
+
+[独热编码One-Hot Encoding]()
+
+```python
+    from sklearn.preprocessing import OneHotEncoder
+    cat_encoder = OneHotEncoder()
+    housing_cat_1hot = cat_encoder.fit_transform(housing_cat)
+    housing_cat_1hot
+```
+
+且该函数输出得是一个**Scipy稀疏矩阵**，而不是一个NumPy数组。因为在完成独热编码之后，得到一个几千列的矩阵，并且全是0，每行仅有一个1。占用大量内存来存储0是一件非常浪费的事情，因此稀疏矩阵选择仅存储非零元素的位置，并依旧可以像使用一个普通的二维数组那样来使用它。如果需要将稀疏矩阵转换成一个（密集的）NumPy数组，只需要调用toarray()方法即可：
+
+```python
+
+```
