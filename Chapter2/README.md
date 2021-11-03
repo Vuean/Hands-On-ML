@@ -528,7 +528,7 @@ Scikit-Learn提供了一个非常容易上手的类来处理缺失值：`SimpleI
 
 独热编码即 One-Hot 编码，又称一位有效编码，其方法是使用N位状态寄存器来对N个状态进行编码，每个状态都由他独立的寄存器位，并且在任意时候，其中只有一位有效。
 
-[独热编码One-Hot Encoding]()
+[独热编码One-Hot Encoding](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter2/%E7%8B%AC%E7%83%AD%E7%BC%96%E7%A0%81One-Hot-Encoding.ipynb)
 
 ```python
     from sklearn.preprocessing import OneHotEncoder
@@ -540,5 +540,224 @@ Scikit-Learn提供了一个非常容易上手的类来处理缺失值：`SimpleI
 且该函数输出得是一个**Scipy稀疏矩阵**，而不是一个NumPy数组。因为在完成独热编码之后，得到一个几千列的矩阵，并且全是0，每行仅有一个1。占用大量内存来存储0是一件非常浪费的事情，因此稀疏矩阵选择仅存储非零元素的位置，并依旧可以像使用一个普通的二维数组那样来使用它。如果需要将稀疏矩阵转换成一个（密集的）NumPy数组，只需要调用toarray()方法即可：
 
 ```python
-
+    # 将稀疏矩阵转为普通矩阵
+    housing_cat_1hot.toarray()
 ```
+
+再次使用编码器的categories_实例变量来得到类别列表：
+
+```python
+    cat_encoder.categories_
+```
+
+### 2.5.3 自定义转换器
+
+虽然Scikit-Learn提供了许多有用的转换器，但是仍需要为一些诸如自定义清理操作或组合特定属性等任务编写自己的转换器。由于Scikit-Learn依赖于鸭子类型的编译，而不是继承，所以目前所需要的只是创建一个类，然后应用以下三种方法：fit()（返回self）、transform()、fit_transform()。
+
+可以通过**添加TransformerMixin作为基类**，直接得到最后一种方法。同时，如果添
+加BaseEstimator作为基类（并在构造函数中避免* args和** kargs），还能额外获得两种非常有用的**自动调整超参数的方法**（get_params()和set_params()）。例如，前面讨论过的组合属性，这里有个简单的转换器类，用来添加组合后的属性：
+
+```python
+    from sklearn.base import BaseEstimator, TransformerMixin
+
+    rooms_ix, bedrooms_ix, population_ix, households_ix = 3,4,5,6
+
+    class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
+        def __init__(self, add_bedrooms_per_room = True) : # no *atgs or **kargs
+            self.add_bedrooms_per_room=add_bedrooms_per_room
+        def fit(self, X, y=None):
+            return self # nothing else to do
+        def transform(self, X, y=None):
+            rooms_per_household = X[:, rooms_ix] / X[:,households_ix]
+            population_per_household = X[:, population_ix] / X[:,households_ix]
+            if self.add_bedrooms_per_room :
+                bedrooms_per_room = X[:, bedrooms_ix] / X[:,rooms_ix]
+                return np.c_[X, rooms_per_household, population_per_household, bedrooms_per_room]
+            else:
+                return np.c_[X, rooms_per_household, population_per_household]
+
+    attr_adder = CombinedAttributesAdder(add_bedrooms_per_room=False)
+    housing_extra_attribs = attr_adder.transform(housing.values)
+```
+
+在本例中，转换器有一个超参数add_bedrooms_per_room默认设置为True（提供合理的默认值通常是很有帮助的）。这个超参数可以让你轻松知晓添加这个属性是否有助于机器学习算法。更一般地，如果你对数据准备的步骤没有充分的信心，就可以添加这个超参数来进行把关。这些数据准备步骤的执行越自动化，你自动尝试的组合也就越多，从而有更大可能从中找到一个重要的组合（还节省了大量时间）。
+
+### 2.5.4 特征缩放
+
+最重要也最需要应用到数据上的转换就是**特征缩放**。如果输入的数值属性具有非常大的比例差异，往往会导致机器学习算法的性能表现不佳，当然也有极少数特例。
+
+同比例缩放所有属性的两种常用方法是**最小-最大缩放(min-max scaling)**和**标准化(standardization)**。
+
+最小-最大缩放（又叫作归一化）很简单：将值重新缩放使其最终范围归于0～1之间。实现方法是将**值减去最小值并除以最大值和最小值的差**。对此，Scikit-Learn提供了一个名为MinMaxScaler的转换器。如果希望手动控制范围，那么可以通过调整超参数feature_range进行更改。
+
+标准化则完全不一样：首先减去平均值（所以标准化值的均值总是零），然后除以方差，从而使得**结果的分布具备单位方差**。标准化不会将值限定在特定范围，且受异常值影响更小。Scikit-Learn提供了一个标准化的转换器StandadScaler。
+
+重要的是，跟所有转换一样，缩放器**仅用来拟合训练集，而不是完整的数据集（包括测试集）**。只有这样，才能使用它们来转换训练集和测试集（和新数据）
+
+### 2.5.5 转换流水线
+
+许多数据转换的步骤需要以正确的顺序来执行。而Scikit-Learn正好提供了Pipeline类来支持这样的转换。下面是一个数值属性的流水线示例：
+
+```python
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    num_pipeline = Pipeline([
+        ('imputer', SimpleImputer(strategy="median")),
+        ('attribs_adder', CombinedAttributesAdder()),
+        ('std_scaler', StandardScaler()),
+    ])
+    housing_num_tr = num_pipeline.fit_transform(housing_num)
+```
+
+Pipeline构造函数会通过一系列名称/估算器的**配对来定义步骤序列**。除了最后一个是
+估算器之外，前面都必须是转换器（也就是说，必须有fit_transform()方法）。
+
+当调用流水线的fit()方法时，会在所有转换器上按照顺序依次调用fit_transform()，将一个调用的输出作为参数传递给下一个调用方法，直到传递到最终的估算器，则只会调用fit()方法。
+
+流水线的方法与最终的估算器的方法相同。在本例中，最后一个估算器是StandardScaler，这是一个转换器，因此流水线有一个transform()方法，可以按顺序将所有的转换应用到数据中（这也是我们用过的fit_transform()方法）。
+
+到目前为止，我们分别处理了类别列和数值列。拥有一个能够处理所有列的转换器会更方便，将适当的转换应用于每个列。在0.20版中，Scikit-Learn为此引入了ColumnTransformer，好消息是它与pandas DataFrames一起使用时效果很好。让我们用它来将所有转换应用到房屋数据：
+
+```python
+    from sklearn.compose import ColumnTransformer
+
+    num_attribs = list(housing_num)
+    cat_attribs = ["ocean_proximity"]
+
+    full_pipeline = ColumnTransformer([
+        ("num", num_pipeline, num_attribs),
+        ("cat", OneHotEncoder(), cat_attribs),
+    ])
+
+    housing_prepared = full_pipeline.fit_transform(housing)
+```
+
+首先导入ColumnTransformer类，接下来获得数值列名称列表和类别列名称列表，然后构造一个ColumnTransformer。构造函数需要一个元组列表，其中每个元组都包含一个名字、一个转换器，以及一个该转换器能够应用的列名字（或索引）的列表。
+
+在此示例中，我们指定数值列使用之前定义的num_pipeline进行转换，类别列使用OneHotEncoder进行转换。最后，我们将ColumnTransformer应用到房屋数据：它将每个转换器应用于适当的列，并沿第二个轴合并输出（转换器必须返回相同数量的行）。
+
+OneHotEncoder返回一个稀疏矩阵，而num_pipeline返回一个密集矩阵。当稀疏矩阵和密集矩阵混合在一起时，ColumnTransformer会估算最终矩阵的密度（即单元格的非零比率），如果密度低于给定的阈值，则返回一个稀疏矩阵（通过默认值为sparse_threshold=0.3）。
+
+## 2.6 选择和训练模型
+
+### 2.6.1 训练和评估训练集
+
+首先,训练一个线性回归模型：
+
+```python
+    from sklearn.linear_model import LinearRegression
+
+    lin_reg = LinearRegression()
+    lin_reg.fit(housing_prepared, housing_labels)
+```
+
+现在拥有一个可以工作的线性回归模型，用几个训练集的实例试试
+
+```python
+    some_data = housing.iloc[:5]
+    some_labels = housing_labels.iloc[:5]
+    some_data_prepared = full_pipeline.transform(some_data)
+    print("Prediction:", lin_reg.predict(some_data_prepared))
+```
+
+使用Scikit-Learn的mean_squared_error()函数来测量整个训练集上回归模型的RMSE：
+
+```python
+    from sklearn.metrics import mean_squared_error
+    hosing_predictions = lin_reg.predict(housing_prepared)
+    lin_mse = mean_squared_error(housing_labels, hosing_predictions)
+    lin_rmse = np.sqrt(lin_mse)
+    lin_rmse
+```
+
+这虽然比什么都没有要好，但显然也不是一个好看的成绩：大多数区域的median_housing_values分布在120000～265000美元之间，所以典型的预测误差达到68628美元只能算是差强人意。这就是一个典型的模型对训练数据欠拟合的案例。这种情况发生时，通常意味着这些特征可能无法提供足够的信息来做出更好的预测，或者是模型本身不够强大。**想要修正欠拟合，可以通过选择更强大的模型，或为算法训练提供更好的特征，又或者减少对模型的限制等方法**。
+
+暂时通过训练更复杂的模型来解决——训练一个DecisioTreeRegressor。这是一个非常强大的模型，它能够从数据中找到复杂的非线性关系。
+
+```python
+    from sklearn.tree import DecisionTreeRegressor
+
+    tree_reg = DecisionTreeRegressor()
+    tree_reg.fit(housing_prepared, housing_labels)
+
+    hosing_predictions = tree_reg.predict(housing_prepared)
+    tree_mse = mean_squared_error(housing_labels, hosing_predictions)
+    tree_rmse = np.sqrt(tree_mse)
+    tree_rmse
+```
+
+结果显示预测误差为0。有可能是模型完美解决了该问题，但更有可能的是模型对数据过拟合。
+
+### 2.6.2 使用交叉验证来更好地进行评估
+
+评估决策树模型的一种方法是使用train_test_split函数将训练集分为较小的训练集和验
+证集，然后根据这些较小的训练集来训练模型，并对其进行评估。
+
+另一个不错的选择是使用Scikit-Learn的K-折交叉验证功能。它将训练集随机分割成10个不同的子集，每个子集称为一个折叠，然后对决策树模型进行10次训练和评估——每次挑选1个折叠进行评估，使用另外的9个折叠进行训练。产生的结果是一个包含10次评估分数的数组：
+
+```python
+    # K-折交叉验证功能
+    from sklearn.model_selection import cross_val_score
+    scores = cross_val_score(tree_reg, housing_prepared, housing_labels,scoring="neg_mean_squared_error", cv=10)
+    tree_rmse_scores = np.sqrt(-scores)
+```
+
+Scikit-Learn的交叉验证功能更倾向于使用效用函数（越大越好）而不是成本函数（越小越好），所以计算分数的函数实际上是负的MSE（一个负值）函数，这就是为什么上面的代码在计算平方根之前会先计算出-scores。
+
+```python
+    def display_scores(scores):
+        print("Scores:", scores)
+        print("Mean:", scores.mean())
+        print("Standard deviation:", scores.std())
+
+    display_scores(tree_rmse_scores)
+
+    Scores: [69327.01708558 65486.39211857 71358.25563341 69091.37509104
+ 70570.20267046 75529.94622521 69895.20650652 70660.14247357
+ 75843.74719231 68905.17669382]
+Mean: 70666.74616904806
+Standard deviation: 2928.322738055112
+```
+
+这次的决策树模型好像不如之前表现得好。事实上，它看起来简直比线性回归模型还要糟糕！请注意，**交叉验证不仅可以得到一个模型性能的评估值，还可以衡量该评估的精确度（即其标准差）**。这里该决策树得出的评分约为70666，上下浮动±2928。如果只使用了一个验证集，就收不到这样的结果信息。交叉验证的代价就是要多次训练模型，因此也不是永远都行得通。
+
+同样计算一下线性回归模型的评分：
+
+```python
+    lin_scores = cross_val_score(lin_reg, housing_prepared, housing_labels,scoring="neg_mean_squared_error", cv=10)
+    lin_rmse_scores = np.sqrt(-lin_scores)
+    display_scores(lin_rmse_scores)
+
+    Scores: [66782.73843989 66960.118071   70347.95244419 74739.57052552
+ 68031.13388938 71193.84183426 64969.63056405 68281.61137997
+ 71552.91566558 67665.10082067]
+Mean: 69052.46136345083
+Standard deviation: 2731.674001798351
+```
+
+决策树模型确实是严重过拟合了，以至于表现得比线性回归模型还要糟糕。
+
+再来尝试一种模型：RandomForestRegressor（随机森林），**通过对特征的随机子集进行许多个决策树的训练，然后对其预测取平均**。在多个模型的基础之上建立模型，称为**集成学习**，这是进一步推动机器学习算法的好方法：
+
+```python
+    forest_scores = cross_val_score(forest_reg, housing_prepared, housing_labels,scoring="neg_mean_squared_error", cv=10)
+    forest_rmse_scores = np.sqrt(-forest_scores)
+    display_scores(forest_rmse_scores)
+
+    Scores: [49469.54113454 47669.08053493 49591.14597627 52145.2679584
+ 49565.22756664 53351.05913562 48786.96533368 47817.30125209
+ 53097.80169069 49907.17425048]
+Mean: 50140.056483335524
+Standard deviation: 1937.7046591544113
+```
+
+这个就好多了：随机森林看起来很有戏。但是，请注意，训练集上的分数仍然远低于验证集，这意味着该模型仍然对训练集过拟合。
+
+每一个尝试过的模型你都应该妥善保存，以便将来可以轻松回到你想要的模型当中。记得还要同时保存超参数和训练过的参数，以及交叉验证的评分和实际预测的结果。
+
+## 2.7 微调模型
+
+在具有有效模型的候选列表的基础上，对模型进行微调。
+
+### 2.7.1 网格搜索
