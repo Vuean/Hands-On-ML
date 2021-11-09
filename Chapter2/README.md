@@ -761,3 +761,140 @@ Standard deviation: 1937.7046591544113
 在具有有效模型的候选列表的基础上，对模型进行微调。
 
 ### 2.7.1 网格搜索
+
+一种微调的方法是**手动调整超参数**，直到找到一组很好的超参数值组合，但这个过程非常枯燥乏味，可能并没有不到足够的时间来探索出各种组合。
+
+可以用Scikit-Learn的GridSearchCV来进行探索，只需要告诉声明进行实验的超参数是什么，以及需要尝试的值，它将会使用交叉验证来评估超参数值的所有可能组合。例如，下面这段代码搜索RandomForestRegressor的超参数值的最佳组合：
+
+```python
+    from sklearn.model_selection import GridSearchCV
+    param_grid = [
+        {'n_estimators':[3, 10, 30], 'max_features': [2, 4, 6, 8]},
+        {'bootstrap': [False], 'n_estimators': [3,10], 'max_features': [2,3,4]},
+    ]
+    forest_reg = RandomForestRegressor()
+    grid_search = GridSearchCV(forest_reg, param_grid, cv=5,
+                                scoring='neg_mean_squared_error',
+                                return_train_score=True)
+    grid_search.fit(housing_prepared, housing_labels)
+```
+
+这个param_grid告诉Scikit-Learn，首先评估第一个dict（词典）中的n_estimator和max_features的所有3×4=12种超参数值组合；接着，尝试第二个dict中超参数值的所有2×3=6种组合，但这次超参数bootstrap需要设置为False而不是True。
+
+总而言之，网格搜索将探索RandomForestRegressor超参数值的12+6=18种组合，并对每个模型进行5次训练（因为使用的是**5-折交叉验证**）。换句话说，总共会完成18×5=90次训练！这可能需要相当长的时间，但是完成后就可以获得最佳的参数组合：
+
+```python
+    # 完成训练
+    grid_search.best_params_
+    {'max_features': 6, 'n_estimators': 30}
+```
+
+可以直接得到最好的估算器：
+
+```python
+# 可以直接得到最好的估算器：
+    grid_search.best_estimator_
+    RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
+                                                max_features=8, max_leaf_nodes=None,min_impurity_decrease=0.0,
+                                                min_samples_split=2, min_weight_fraction_leaf=0.0,
+                                                n_estimators=30, n_jobs=None, oob_score=False, random_state=None,
+                                                verbose=0, warm_start=False)
+```
+
+如果GridSearchCV被初始化为refit=True（默认值），那么一旦通过交叉验证找到了最佳估算器，它将在整个训练集上重新训练。这通常是个好方法，因为提供更多的数据很可能提升其性能。
+
+当然还有评估分数：
+
+```python
+    # 评估分数：
+    cvres = grid_search.cv_results_
+    for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
+        print(np.sqrt(-mean_score), params)
+```
+
+### 2.7.2 随机搜索
+
+如果探索的组合数量较少，那么网格搜索是一种不错的方法。但是当超参数的搜索范围较大时，通常会优先选择使用`RandomizedSearchCV`。这个类用起来与GridSearchCV类大致相同，但它不会尝试所有可能的组合，而是在每次迭代中为每个超参数选择一个随机值，然后对一定数量的随机组合进行评估。这种方法有两个显著好处：
+
+- 如果运行随机搜索1000个迭代，那么将会探索每个超参数的1000个不同的值（而不是像网格搜索方法那样每个超参数仅探索少量几个值）。
+
+- 通过简单地设置迭代次数，可以更好地控制要分配给超参数搜索的计算预算
+
+### 2.7.3 集成方法
+
+组合（或“集成”）方法通常比最佳的单一模型更好（就像随机森林比其所依赖的任何单个决策树模型更好一样），特别是当单一模型会产生不同类型误差时更是如此。
+
+### 2.7.4 分析最佳模型及其误差
+
+通过检查最佳模型，总是可以得到一些好的洞见。例如在进行准确预测时，RandomForestRegressor可以指出每个属性的相对重要程度：
+
+```python
+    feature_importances = grid_search.best_estimator_.feature_importances_
+    feature_importances
+
+    array([7.55720671e-02, 6.39878625e-02, 4.24072059e-02, 1.82928273e-02,
+       1.68924417e-02, 1.75601900e-02, 1.66881781e-02, 3.03268232e-01,
+       6.31565549e-02, 1.08958622e-01, 8.44196144e-02, 8.53515062e-03,
+       1.73063945e-01, 8.08024120e-05, 2.96250425e-03, 4.15380176e-03])
+```
+
+将这些重要性分数显示在对应的属性名称旁边：
+
+```python
+    extra_attribs = ["rooms_per_hhold", "pop_per_hhold", "bedrooms_per_room"]
+    cat_encoder = full_pipeline.named_transformers_["cat"]
+    cat_one_hot_attribs = list(cat_encoder.categories_[0])
+    attributes = num_attribs + extra_attribs + cat_one_hot_attribs
+    sorted(zip(feature_importances, attributes), reverse=True)
+
+    [(0.303268232301214, 'median_income'),
+    (0.1730639450304893, 'INLAND'),
+    (0.10895862174634885, 'pop_per_hhold'),
+    (0.0844196144263057, 'bedrooms_per_room'),
+    (0.07557206707255014, 'longitude'),
+    (0.0639878625247799, 'latitude'),
+    (0.06315655490931625, 'rooms_per_hhold'),
+    (0.04240720593117473, 'housing_median_age'),
+    (0.018292827323116517, 'total_rooms'),
+    (0.017560189966804522, 'population'),
+    (0.01689244166020893, 'total_bedrooms'),
+    (0.01668817806453196, 'households'),
+    (0.008535150622100876, '<1H OCEAN'),
+    (0.0041538017589390725, 'NEAR OCEAN'),
+    (0.0029625042500806965, 'NEAR BAY'),
+    (8.080241203860085e-05, 'ISLAND')]
+```
+
+有了这些信息，你可以尝试删除一些不太有用的特征。
+
+### 2.7.5 通过测试集评估系统
+
+现在是用测试集评估最终模型的时候了。这个过程没有什么特别的，只需要从测试集中获取预测器和标签，运行full_pipeline来转换数据（调用transform()而不是fit_transform()），然后在测试集上评估最终模型：
+
+```python
+# 在测试集上评估最终模型：
+    final_model = grid_search.best_estimator_
+
+    X_test = strat_test_set.drop("median_house_value", axis = 1)
+    y_test = strat_test_set["median_house_value"].copy()
+
+    X_test_prepared  = full_pipeline.transform(X_test)
+
+    final_predictions = final_model.predict(X_test_prepared)
+
+    final_mse = mean_squared_error(y_test, final_predictions)
+    final_rmse = np.sqrt(final_mse) # =>evaluates to 47730.2
+```
+
+在某些情况下，泛化误差的这种点估计将不足以说服你启动生产环境：如果它仅比当前生产环境中的模型好0.1%？你可能想知道这个估计的精确度。为此，你可以使用scipy.stats.t.interval()计算泛化误差的95%置信区间：
+
+```python
+    from scipy import stats
+    confidence = 0.95
+    squared_errors = (final_predictions - y_test) ** 2
+    np.sqrt(stats.t.interval(confidence, len(squared_errors) -1,
+                                                        loc=squared_errors.mean(),
+                                                        scale=stats.sem(squared_errors)))
+```
+
+## 2.8 启动、监控和维护你的系统
