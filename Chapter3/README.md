@@ -373,7 +373,7 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
     plt.show()
 ```
 
-![图09_ROC曲线]()
+![图09_ROC曲线](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE09_ROC%E6%9B%B2%E7%BA%BF.jpg)
 
 同样这里再次面临一个折中权衡：召回率（TPR）越高，分类器产生的假正类（FPR）就越多。虚线表示纯随机分类器的ROC曲线、一个优秀的分类器应该离这条线越远越好（向左上角）。
 
@@ -421,7 +421,7 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
     plt.show()
 ```
 
-![图10_比较ROC曲线]()
+![图10_比较ROC曲线](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE10_%E6%AF%94%E8%BE%83ROC%E6%9B%B2%E7%BA%BF.jpg)
 
 `RandomForestClassifier`的ROC曲线看起来比`SGDClassifier`好很多，它离左上角更接近，因此它的ROC AUC分数也高得多：
 
