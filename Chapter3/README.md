@@ -223,7 +223,7 @@ Scikit-Learn提供了计算多种分类器指标的函数，包括精度和召�
 
 因此我们可以很方便地将精度和召回率组合成一个单一的指标，称为**F1分数**。当你需要一个简单的方法来比较两种分类器时，这是个非常不错的指标。**F1分数是精度和召回率的谐波平均值**（见公式3-3）。**正常的平均值平等对待所有的值，而谐波平均值会给予低值更高的权重。因此，只有当召回率和精度都很高时，分类器才能得到较高的F1分数**。
 
-![图05_F1公式]()
+![图05_F1公式](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE05_F1%E5%85%AC%E5%BC%8F.png)
 
 要计算F1分数，只需要调用f1_score()即可：
 
@@ -241,8 +241,104 @@ F1分数对那些具有相近的精度和召回率的分类器更为有利。这
 
 要理解这个权衡过程，我们来看看SGDClassifier如何进行分类决策。对于每个实例，它会基于决策函数计算出一个分值，如果该值大于阈值，则将该实例判为正类，否则便将其判为负类。下图显示了从左边最低分到右边最高分的几个数字。假设决策阈值位于中间箭头位置（两个5之间）：在阈值的右侧可以找到4个真正类（真的5）和一个假正类（实际上是6）。因此，在该阈值下，精度为80%（4/5）。但是在6个真正的5中，分类器仅检测到了4个，所以召回率为67%（4/6）。现在，如果提高阈值（将其挪动到右边箭头的位置），假正类（数字6）变成了真负类，因此精度得到提升（本例中提升到100%），但是一个真正类变成一个假负类，召回率降低至50%。反之，降低阈值则会在增加召回率的同时降低精度。
 
-![图06_分类器评分]()
+Scikit-Learn不允许直接设置阈值，但是可以访问它用于预测的决策分数。不是调用分类器的`predict()`方法，而是调用`decision_function()`方法，这种方法**返回每个实例的分数，然后就可以根据这些分数，使用任意阈值进行预测**了：
+
+![图06_分类器评分](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE06_%E5%88%86%E7%B1%BB%E5%99%A8%E8%AF%84%E5%88%86.jpg)
 
 ```python
-
+    y_scores = sgd_clf.decision_function([some_digit])
+    y_scores
 ```
+
+```python
+    threshold = 0
+    y_some_digit_pred = (y_scores > threshold)
+    y_some_digit_pred
+    >>> array([true])
+```
+
+SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与predict()方法一样（也就是True）。我们来试试提升阈值：
+
+```python
+    threshold = 8000
+    y_some_digit_pred = (y_scores > threshold)
+    y_some_digit_pred
+    >>> array([false])
+```
+
+这证明了提高阈值确实可以降低召回率。这张图确实是5，当阈值为0时，分类器可以检测到该图，但是当阈值提高到8000时，就错过了这张图。
+
+那么要如何决定使用什么阈值呢？首先，使用`cross_val_predict()`函数获取训练集中所有实例的分数，但是这次需要它返回的是决策分数而不是预测结果：
+
+```python
+    y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3, method="decision_function")
+```
+
+有了这些分数，可以使用`precision_recall_curve()`函数来计算所有可能的阈值的精度和召回率：
+
+```python
+    from sklearn.metrics import precision_recall_curve
+    precisions, recalls, thresholds = precision_recall_curve(y_train_5, y_scores)
+```
+
+最后，使用Matplotlib绘制精度和召回率相对于阈值的函数图:
+
+```python
+    def plot_precision_recall_vs_threshold(precisions, recalls, thresholds):
+        plt.plot(thresholds, precisions[:-1], "b--", label="Precision", linewidth=2)
+        plt.plot(thresholds, recalls[:-1], "g-", label="Recall", linewidth=2)
+        plt.legend(loc="center right", fontsize=16)
+        plt.xlabel("Threshold", fontsize=16)        # Not shown
+        plt.grid(True)                              # Not shown
+        plt.axis([-50000, 50000, 0, 1])             # Not shown
+
+
+
+    recall_90_precision = recalls[np.argmax(precisions >= 0.90)]
+    threshold_90_precision = thresholds[np.argmax(precisions >= 0.90)]
+
+
+    plt.figure(figsize=(8, 4)) 
+    plot_precision_recall_vs_threshold(precisions, recalls, thresholds)
+    plt.plot([threshold_90_precision, threshold_90_precision], [0., 0.9], "r:")
+    plt.plot([-50000, threshold_90_precision], [0.9, 0.9], "r:")
+    plt.plot([-50000, threshold_90_precision], [recall_90_precision, recall_90_precision], "r:")# Not shown
+    plt.plot([threshold_90_precision], [0.9], "ro")
+    plt.plot([threshold_90_precision], [recall_90_precision], "ro")
+    save_fig("precision_recall_vs_threshold_plot")
+    plt.show()
+```
+
+![图07_精度和召回率与决策阈值]()
+
+上图中精度曲线比召回率曲线要崎岖一些的原因在于：当提高阈值时，精度有时也有可能会下降（尽管总体趋势是上升的）。另一方面，当阈值上升时，召回率只会下降，这就解释了为什么召回率的曲线看起来很平滑。
+
+另一种找到好的精度/召回率权衡的方法是**直接绘制精度和召回率的函数图**，如图8所示（突出显示与前面相同的阈值）。
+
+从图中可以看到，从80%的召回率往右，精度开始急剧下降。为此，可能会尽量在这个陡降之前选择一个精度/召回率权衡——比如召回率60%。当然，如何选择取决于项目的实际需要。
+
+![图08_精度与召回率]()
+
+假设决定将精度设为90%。查找图7并发现需要设置8000的阈值。更精确地说，你可以搜索到能提供至少90%精度的最低阈值（`np.argmax()`会给你最大值的第一个索引，在这种情况下，它表示第一个True值）：
+
+```python
+    threshold_90_precision = thresholds[np.argmax(precisions >= 0.90)]
+    threshold_90_precision
+```
+
+要进行预测（现在是在训练集上），除了调用分类器的`predict()`方法，也可以运行这段代码：
+
+```python
+    y_train_pred_90 = (y_scores >= threshold_90_precision)
+```
+
+检查一下这些预测结果的精度和召回率：
+
+```python
+    precision_score(y_train_5, y_train_pred_90)
+    recall_score(y_train_5, y_train_pred_90)
+```
+
+现在你有一个90%精度的分类器了（或者足够接近）！如你所见，创建任意一个你想要的精度的分类器是相当容易的事情：只要阈值足够高即可！然而，如果召回率太低，精度再高，其实也不怎么有用！
+
+### 3.3.5 ROC曲线
