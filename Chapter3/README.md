@@ -309,7 +309,7 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
     plt.show()
 ```
 
-![图07_精度和召回率与决策阈值]()
+![图07_精度和召回率与决策阈值](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE07_%E7%B2%BE%E5%BA%A6%E5%92%8C%E5%8F%AC%E5%9B%9E%E7%8E%87%E4%B8%8E%E5%86%B3%E7%AD%96%E9%98%88%E5%80%BC.jpg)
 
 上图中精度曲线比召回率曲线要崎岖一些的原因在于：当提高阈值时，精度有时也有可能会下降（尽管总体趋势是上升的）。另一方面，当阈值上升时，召回率只会下降，这就解释了为什么召回率的曲线看起来很平滑。
 
@@ -317,7 +317,7 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
 
 从图中可以看到，从80%的召回率往右，精度开始急剧下降。为此，可能会尽量在这个陡降之前选择一个精度/召回率权衡——比如召回率60%。当然，如何选择取决于项目的实际需要。
 
-![图08_精度与召回率]()
+![图08_精度与召回率](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/%E5%9B%BE08_%E7%B2%BE%E5%BA%A6%E4%B8%8E%E5%8F%AC%E5%9B%9E%E7%8E%87.jpg)
 
 假设决定将精度设为90%。查找图7并发现需要设置8000的阈值。更精确地说，你可以搜索到能提供至少90%精度的最低阈值（`np.argmax()`会给你最大值的第一个索引，在这种情况下，它表示第一个True值）：
 
@@ -342,3 +342,91 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
 现在你有一个90%精度的分类器了（或者足够接近）！如你所见，创建任意一个你想要的精度的分类器是相当容易的事情：只要阈值足够高即可！然而，如果召回率太低，精度再高，其实也不怎么有用！
 
 ### 3.3.5 ROC曲线
+
+还有一种经常与二元分类器一起使用的工具，叫作**受试者工作特征曲线**（简称ROC）。它与精度/召回率曲线非常相似，但绘制的不是精度和召回率，而是**真正类率**（召回率的另一名称）和**假正类率**（FPR）。**FPR是被错误分为正类的负类实例比率**。它等于1减去真负类率（TNR），后者是被正确分类为负类的负类实例比率，也称为特异度。因此，**ROC曲线绘制的是灵敏度（召回率）和（1-特异度）的关系**。
+
+要绘制ROC曲线，首先需要使用`roc_curve()`函数计算多种阈值的TPR和FPR：
+
+```python
+    from sklearn.metrics import roc_curve
+    fpr, tpr, thresholds = roc_curve(y_train_5, y_scores)
+```
+
+然后，使用Matplotlib绘制FPR对TPR的曲线。下面的代码可以绘制出图9的曲线：
+
+```python
+    def plot_roc_curve(fpr, tpr, label=None):
+        plt.plot(fpr, tpr, linewidth=2, label=label)
+        plt.plot([0, 1], [0, 1], "k--")
+        plt.axis([0, 1, 0, 1])
+        plt.xlabel('False Positive Rate(Fall-Out)', fontsize=16)
+        plt.ylabel('True Positive Rate(Recall)', fontsize=16)
+        plt.grid(True)
+
+    plt.figure(figsize=(8, 6))
+    plot_roc_curve(fpr, tpr)
+    fpr_90 = fpr[np.argmax(tpr >= recall_90_precision)]
+    plt.plot([fpr_90, fpr_90], [0., recall_90_precision], "r:") 
+    plt.plot([0.0, fpr_90], [recall_90_precision, recall_90_precision], "r:")
+    plt.plot([fpr_90], [recall_90_precision], "ro")
+    save_fig("roc_curve_plot")
+    plt.show()
+```
+
+![图09_ROC曲线]()
+
+同样这里再次面临一个折中权衡：召回率（TPR）越高，分类器产生的假正类（FPR）就越多。虚线表示纯随机分类器的ROC曲线、一个优秀的分类器应该离这条线越远越好（向左上角）。
+
+有一种比较分类器的方法是测量曲线下面积（AUC）。完美的分类器的ROC AUC等于1，而纯随机分类器的ROC AUC等于0.5。Scikit-Learn提供计算ROC AUC的函数：
+
+```python
+    from sklearn.metrics import roc_auc_score
+    roc_auc_score(y_train_5, y_scores)
+```
+
+由于ROC曲线与精度/召回率（PR）曲线非常相似，因此你可能会问如何决定使用哪种曲线。有一个经验法则是，**当正类非常少见或者你更关注假正类而不是假负类时，应该选择PR曲线，反之则是ROC曲线**。
+
+训练一个`RandomForestClassifier`分类器，并比较它和`SGDClassifier`分类器的ROC曲线和ROC AUC分数。首先，获取训练集中每个实例的分数。但是由于它的工作方式不同（参见第7章），`RandomForestClassifie`r类没有`decision_function()`方法，相反，它有`dict_proba()`方法。Scikit-Learn的分类器通常都会有这两种方法中的一种（或两种都有）。`dict_proba()`方法会返回一个数组，其中每行代表一个实例，每列代表一个类别，意思是某个给定实例属于某个给定类别的概率（例如，这张图片有70%的可能是数字5）
+
+```python
+    from sklearn.ensemble import RandomForestClassifier
+
+    forest_clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    y_probas_forest = cross_val_predict(forest_clf, X_train, y_train_5, cv=3, method="predict_proba")
+```
+
+`roc_curve()`函数需要标签和分数，但是我们不提供分数，而是提供类概率。我们直接使用正类的概率作为分数值。
+
+```python
+    y_scores_forest = y_probas_forest[:, 1]
+    fpr_forest, tpr_forest, threshold_forest = roc_curve(y_train_5, y_scores_forest)
+```
+
+现在可以绘制ROC曲线了。绘制第一条ROC曲线来看看对比结果：
+
+```python
+    recall_for_forest = tpr_forest[np.argmax(fpr_forest >= fpr_90)]
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, "b:", linewidth=2, label="SGD")
+    plot_roc_curve(fpr_forest, tpr_forest, "Random Forest")
+    plt.plot([fpr_90, fpr_90], [0., recall_90_precision], "r:")
+    plt.plot([0.0, fpr_90], [recall_90_precision, recall_90_precision], "r:")
+    plt.plot([fpr_90], [recall_90_precision], "ro")
+    plt.plot([fpr_90, fpr_90], [0., recall_for_forest], "r:")
+    plt.plot([fpr_90], [recall_for_forest], "ro")
+    plt.grid(True)
+    plt.legend(loc="lower right", fontsize=16)
+    save_fig("roc_curve_comparison_plot")
+    plt.show()
+```
+
+![图10_比较ROC曲线]()
+
+`RandomForestClassifier`的ROC曲线看起来比`SGDClassifier`好很多，它离左上角更接近，因此它的ROC AUC分数也高得多：
+
+```python
+    roc_auc_score(y_train_5, y_scores_forest)
+```
+
+## 3.4 多类分类器
