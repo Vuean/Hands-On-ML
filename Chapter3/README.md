@@ -430,3 +430,220 @@ SGDClassifier分类器使用的阈值是0，所以前面代码的返回结果与
 ```
 
 ## 3.4 多类分类器
+
+二元分类器在两个类中区分，而多类分类器（也称为多项分类器）可以区分两个以上的类。
+
+有一些算法（如**随机森林分类器或朴素贝叶斯分类器**）可以直接处理多个类。也有一些严格的二元分类器（如**支持向量机分类器或线性分类器**）。但是，有多种策略可以让你用几个二元分类器实现多类分类的目的。
+
+要创建一个系统将数字图片分为10类（从0到9），一种方法是训练10个二元分类器，每个数字一个（0-检测器、1-检测器、2-检测器，以此类推）。然后，当你需要对一张图片进行检测分类时，获取每个分类器的决策分数，哪个分类器给分最高，就将其分为哪个类。这称为**一对剩余（OvR）策略，也称为一对多（one-versus-all）**。
+
+另一种方法是为**每一对数字训练一个二元分类器**：一个用于区分0和1，一个区分0和2，一个区分1和2，以此类推。这称为**一对一（OvO）策略**。如果存在N个类别，那么这需要训练N×（N-1）/2个分类器。对于MNIST问题，这意味着要训练45个二元分类器！当需要对一张图片进行分类时，你需要运行45个分类器来对图片进行分类，最后看哪个类获胜最多。OvO的主要优点在于，**每个分类器只需要用到部分训练集对其必须区分的两个类进行训练**。
+
+有些算法（例如支持向量机分类器）在数据规模扩大时表现糟糕。对于这类算法，OvO是一个优先的选择，因为在较小训练集上分别训练多个分类器比在大型数据集上训练少数分类器要快得多。但是对大多数二元分类器来说，OvR策略还是更好的选择。
+
+Scikit-Learn可以检测到你尝试使用二元分类算法进行多类分类任务，它会根据情况自动运行OvR或者OvO。我们用sklearn.svm.SVC类来试试SVM分类器：
+
+```python
+    from sklearn.svm import SVC
+    svm_clf = SVC()
+    svm_clf.fit(X_train, y_train)
+    svm_clf.predict([some_digit])
+```
+
+非常容易！这段代码使用原始目标类0到9（y_train）在训练集上对SVC进行训练，而不是以“5”和“剩余”作为目标类（y_train_5），然后做出预测（在本例中预测正确）。而在内部，Scikit-Learn实际上训练了45个二元分类器，获得它们对图片的决策分数，然后选择了分数最高的类。
+
+要想知道是不是这样，可以调用`decision_function()`方法。它会返回10个分数，每个类1个，而不再是每个实例返回1个分数：
+
+```python
+    some_dgit_scores = svm_clf.decision_function([some_digit])
+    some_dgit_scores
+```
+
+最高分确实是对应数字5这个类别：
+
+```python
+    np.argmax(some_digit_scores)
+    svm_clf.classes_
+    svm_clf.classes_[5]
+```
+
+当训练分类器时，目标类的列表会存储在classes_属性中，按值的大小排序。在本例里，classes_数组中每个类的索引正好对应其类本身（例如，索引上第5个类正好是数字5这个类），但是一般来说，不会这么恰巧。
+
+如果想要强制Scikit-Learn使用一对一或者一对剩余策略，可以使用`OneVsOneClassifier`或`OneVsRestClassifier`类。只需要创建一个实例，然后将分类器传给其构造函数（它甚至不必是二元分类器）。例如，下面这段代码使用OvR策略，基于SVC创建了一个多类分类器：
+
+```python
+    from sklearn.multiclass import OneVsRestClassifier
+    ovr_clf = OneVsRestClassifier(SVC(gamma="auto", random_state=42))
+    ovr_clf.fit(X_train[:1000], y_train[:1000])
+    ovr_clf.predict([some_digit])
+    >>>
+
+```
+
+训练`SGDClassifier`或者`RandomForestClassifier`同样简单：
+
+```python
+    sgd_clf.fit(X_train, y_train)
+    sgd_clf.predict([some_digit])
+```
+
+这次Scikit-Learn不必运行OvR或者OvO了，因为SGD分类器直接就可以将实例分为多个类。调用`decision_function()`可以获得分类器将每个实例分类为每个类的概率列表：让我们看一下SGD分类器分配到的每个类：
+
+```python
+    sgd_clf.decision_function([some_digit])
+```
+
+你可以看到分类器对其预测相当有信心：几乎所有分数基本上都是负的，而第5类的得分是2412.5。该模型有一点疑问是关于第3类，得分为573.5。现在，你当然要评估这个分类器。与往常一样，可以使用交叉验证。使用`cross_val_score()`函数来评估SGDClassifier的准确性：
+
+```python
+    cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy")
+```
+
+在所有的测试折叠上都超过了84%。如果是一个纯随机分类器，准确率大概是10%，所以这个结果不是太糟，但是依然有提升的空间。例如，将输入进行简单缩放（如第2章所述）可以将准确率提到89%以上：
+
+```python
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train.astype(np.float64))
+    cross_val_score(sgd_clf, X_train_scaled, y_train, cv=3, scoring="accuracy")
+```
+
+## 3.5 误差分析
+
+当然，如果这是一个真正的项目，你将遵循机器学习项目清单中的步骤（见附录B）：探索数据准备的选项，尝试多个模型，列出最佳模型并用`GridSearchCV`对其超参数进行微调，尽可能自动化，等等。正如你在之前的章节里尝试的那些。在这里，假设你已经找到了一个有潜力的模型，现在你希望找到一些方法对其进一步改进。方法之一就是分析其错误类型。
+
+首先看看混淆矩阵。就像之前做的，使用`cross_val_predict()`函数进行预测，然后调用`confusion_matrix()`函数：
+
+```python
+    y_train_pred = cross_val_predict(sgd_clf, X_train_scaled, y_train, cv=3)
+    conf_mx = confusion_matrix(y_train, y_train_pred)
+    conf_mx
+```
+
+使用Matplotlib的`matshow()`函数来查看混淆矩阵的图像表示通常更加方便（见下图）：
+
+```python
+    plt.matshow(conf_mx, cmap=plt.cm.gray)
+    plt.show()
+```
+
+![图11_灰度图]()
+
+混淆矩阵看起来很不错，因为大多数图片都在主对角线上，这说明它们被正确分类。数字5看起来比其他数字稍稍暗一些，这可能意味着数据集中数字5的图片较少，也可能是分类器在数字5上的执行效果不如在其他数字上好。实际上，你可能会验证这两者都属实。
+
+让我们把焦点放在错误上。首先，你需要将混淆矩阵中的每个值除以相应类中的图片数量，这样你比较的就是**错误率**而不是错误的绝对值（后者对图片数量较多的类不公平）：
+
+```python
+    row_sums = conf_mx.sum(axis=1, keepdims=True)
+    norm_conf_mx = conf_mx / row_sums
+```
+
+用0填充对角线，只保留错误，重新绘制结果：
+
+```python
+    np.fill_diagonal(norm_conf_mx, 0)
+    plt.matshow(norm_conf_mx, cmap=plt.cm.gray)
+    plt.show()  
+```
+
+![图12_灰度图2]()
+
+现在可以清晰地看到分类器产生的错误种类了。记住，**每行代表实际类，而每列表示预测类**。第8列看起来非常亮，说明有许多图片被错误地分类为数字8了。然而，第8行不那么差，告诉你实际上数字8被正确分类为数字8。注意，错误不是完全对称的，比如，数字3和数字5经常被混淆（在两个方向上）。
+
+分析混淆矩阵通常可以帮助你深入了解如何改进分类器。通过上图来看，你的精力可以花在改进数字8的分类错误上。例如，可以试着收集更多看起来像数字8的训练数据，以便分类器能够学会将它们与真实的数字区分开来。或者，也可以开发一些新特征来改进分类器——例如，写一个算法来计算闭环的数量（例如，数字8有两个，数字6有一个，数字5没有）。再或者，还可以对图片进行预处理（例如，使用Scikit-Image、Pillow或OpenCV）让某些模式更为突出，比如闭环之类的。
+
+分析单个的错误也可以为分类器提供洞察：它在做什么？它为什么失败？但这通常更加困难和耗时。例如，我们来看看数字3和数字5的示例（`plot_digits()`函数只是使用Matplotlib的`imshow()`函数，详见Jupyter notebook）：
+
+```python
+    cl_a, cl_b = 3, 5
+    X_aa = X_train[(y_train == cl_a) & (y_train_pred == cl_a)]
+    X_ab = X_train[(y_train == cl_a) & (y_train_pred == cl_b)]
+    X_ba = X_train[(y_train == cl_b) & (y_train_pred == cl_a)]
+    X_bb = X_train[(y_train == cl_b) & (y_train_pred == cl_b)]
+
+    plt.figure(figsize=(8,8))
+    plt.subplot(221); plot_digits(X_aa[:25], images_per_row=5)
+    plt.subplot(222); plot_digits(X_ab[:25], images_per_row=5)
+    plt.subplot(223); plot_digits(X_ba[:25], images_per_row=5)
+    plt.subplot(224); plot_digits(X_bb[:25], images_per_row=5)
+    save_fig("error_analysis_digits_plot")
+    plt.show()
+```
+
+![图13_3-5混淆图]()
+
+左侧的两个5×5矩阵显示了被分类为数字3的图片，右侧的两个5×5矩阵显示了被分类为数字5的图片。分类器弄错的数字（即左下方和右上方的矩阵）里，确实有一些写得非常糟糕，即便是人类也很难做出区分（例如，第1行的数字5看起来真的很像数字3）。然而，对我们来说，大多数错误分类的图片看起来还是非常明显的错误，我们很难理解分类器为什么会弄错。原因在于，我们使用的简单的SGDClassifier模型是一个线性模型。它所做的就是为每个像素分配一个各个类别的权重，当它看到新的图像时，将加权后的像素强度汇总，从而得到一个分数进行分类。而数字3和数字5只在一部分像素位上有区别，所以分类器很容易将其弄混。
+
+数字3和数字5之间的主要区别是在于连接顶线和下方弧线的中间那段小线条的位置。如果你写的数字3将连接点略往左移，分类器就可能将其分类为数字5，反之亦然。换言之，这个分类器对图像移位和旋转非常敏感。因此，减少数字3和数字5混淆的方法之一，**就是对图片进行预处理，确保它们位于中心位置并且没有旋转**。这也同样有助于减少其他错误。
+
+## 3.6 多标签分类
+
+到目前为止，每个实例都只会被分在一个类里。而在某些情况下，你希望分类器为每个实例输出多个类。例如，人脸识别的分类器：如果在一张照片里识别出多个人怎么办？当然，应该为识别出来的每个人都附上一个标签。假设分类器经过训练，已经可以识别出三张脸——爱丽丝、鲍勃和查理，那么当看到一张爱丽丝和查理的照片时，它应该输出[1，0，1]（意思是“是爱丽丝，不是鲍勃，是查理”）这种输出多个二元标签的分类系统称为多标签分类系统。
+
+为了阐释清楚，这里不讨论面部识别，让我们来看一个更为简单的示例：
+
+```python
+    from sklearn.neighbors import KNeighborsClassifier
+
+    y_train_large = (y_train >= 7)
+    y_train_odd = (y_train % 2 == 1)
+    y_multilabel =  np.c_[y_train_large, y_train_odd]
+
+    knn_clf = KNeighborsClassifier()
+    knn_clf.fit(X_train, y_multilabel)
+```
+
+这段代码会创建一个y_multilabel数组，其中包含两个数字图片的目标标签：第一个表示数字是否是大数（7、8、9），第二个表示是否为奇数。下一行创建一个`KNeighborsClassifier`实例（它支持多标签分类，不是所有的分类器都支持），然后使用多个目标数组对它进行训练。现在用它做一个预测，注意它输出两个标签：
+
+```python
+    knn_clf.predict([some_digit])
+    >>>array([[False,  True]])
+```
+
+结果是正确的！数字5确实不大（False），为奇数（True）。
+
+评估多标签分类器的方法很多，如何选择正确的度量指标取决于你的项目。比如方法之一是测量每个标签的F1分数（或者之前讨论过的任何其他二元分类器指标），然后简单地计算平均分数。下面这段代码计算所有标签的平均F1分数：
+
+```python
+    y_train_knn_pred = cross_val_predict(knn_clf, X_train, y_multilabel, cv=3)
+    f1_score(y_multilabel, y_train_knn_pred, average='macro')
+```
+
+这里假设所有的标签都同等重要，但实际可能不是这样。特别地，如果训练的照片里爱丽丝比鲍勃和查理要多很多，你可能想给区分爱丽丝的分类器更高的权重。一个简单的办法是给每个标签设置一个等于其自身支持的权重（也就是具有该目标标签的实例的数量）。为此，只需要在上面的代码中设置average="weighted"即可。
+
+## 3.7 多输出分类
+
+我们即将讨论的最后一种分类任务称为**多输出-多类分类**（或简单地称为多输出分类）。简单来说，它是多标签分类的泛化，其标签也可以是多类的（比如它可以有两个以上可能的值）。
+
+为了说明这一点，构建一个系统去除图片中的噪声。给它输入一张有噪声的图片，它将（希望）输出一张干净的数字图片，与其他MNIST图片一样，以像素强度的一个数组作为呈现方式。请注意，这个分类器的输出是多个标签（一个像素点一个标签），每个标签可以有多个值（像素强度范围为0到225）。所以这是个多输出分类器系统的示例。
+
+分类和回归之间的界限有时很模糊，比如这个示例。可以说，预测像素强度更像是回归任务而不是分类。而多输出系统也不仅仅限于分类任务，可以让一个系统给每个实例输出多个标签，同时包括类标签和值标签。
+
+还先从创建训练集和测试集开始，使用NumPy的`randint()`函数为MNIST图片的像素强度增加噪声。目标是将图片还原为原始图片：
+
+```python
+    noise = np.random.randint(0, 100, (len(X_train), 784))
+    X_train_mod = X_train + noise
+    noise = np.random.randint(0, 100, (len(X_test), 784))
+    X_test_mod = X_test + noise
+    y_train_mod = X_train
+    y_test_mod = X_test
+```
+
+瞥一眼测试集中的图像（没错，我们正在窥探测试数据，你现在确实应该皱眉头）：
+
+![图14_去噪后图片]()
+
+左边是有噪声的输入图片，右边是干净的目标图片。现在通过训练分类器，清洗这张图片：
+
+```python
+    knn_clf.fit(X_train_mod, y_train_mod)
+    clean_digit = knn_clf.predict([X_test_mod[some_index]])
+    plot_digit(clean_digit)
+```
+
+![图15_去噪后图片]()
+
+看起来离目标够接近了。分类器之旅到此结束。希望现在你掌握了如何为分类任务选择好的指标，如何选择适当的精度/召回率权衡，如何比较多个分类器，以及更为概括地说，如何为各种任务构建卓越的分类系统。
+
+## 3.8 练习题
