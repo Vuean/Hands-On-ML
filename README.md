@@ -11,3 +11,5 @@
 [第三章 分类](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/README.md)
 
 [第四章 训练模型](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter4/README.md)
+
+[ 第五章 支持向量机](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/README.md)
