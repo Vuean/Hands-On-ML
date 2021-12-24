@@ -9,3 +9,5 @@
 [第二章 端到端的机器学习项目](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter2/README.md)
 
 [第三章 分类](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter3/README.md)
+
+[第四章 训练模型](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter4/README.md)
