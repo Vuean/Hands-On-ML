@@ -8,32 +8,47 @@
 
 SVM的基本思想可以用一些图来说明。下图所示的数据集来自第4章末尾引用的鸢尾花数据集的一部分。两个类可以轻松地被一条直线（它们是线性可分离的）分开。左图显示了三种可能的线性分类器的决策边界。其中虚线所代表的模型表现非常糟糕，甚至都无法正确实现分类。其余两个模型在这个训练集上表现堪称完美，但是它们的决策边界与实例过于接近，导致在面对新实例时，表现可能不会太好。相比之下，右图中的实线代表SVM分类器的决策边界，这条线不仅分离了两个类，并且尽可能远离了最近的训练实例。你可以将SVM分类器视为**在类之间拟合可能的最宽的街道（平行的虚线所示）**。因此这也叫作**大间隔分类**。
 
-![fig01_大间隔分类]()
+![fig01_大间隔分类](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/fig01_%E5%A4%A7%E9%97%B4%E9%9A%94%E5%88%86%E7%B1%BB.jpg)
 
 请注意，在“街道以外”的地方增加更多训练实例不会对决策边界产生影响，也就是说它完全由位于街道边缘的实例所决定（或者称之为“支持”）。这些实例被称为**支持向量**（在上图中已圈出）。
 
 SVM对特征的缩放非常敏感，如下图所示，在左图中，垂直刻度比水平刻度大得多，因此可能的最宽的街道接近于水平。在特征缩放（例如使用Scikit-Learn的`StandardScaler`）后，决策边界看起来好了很多（见右图）。
 
-![fig02_特征缩放敏感性]()
+![fig02_特征缩放敏感性](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/fig02_%E7%89%B9%E5%BE%81%E7%BC%A9%E6%94%BE%E6%95%8F%E6%84%9F%E6%80%A7.jpg)
 
 ### 5.1.1 软间隔分类
 
 如果我们严格地让所有实例都不在街道上，并且位于正确的一边，这就是**硬间隔分类**。硬间隔分类有两个主要问题。**首先**，它只在数据是线性可分离的时候才有效；**其次**，它对异常值非常敏感。下图显示了有一个额外异常值的鸢尾花数据：左图的数据根本找不出硬间隔，而右图最终显示的决策边界与我们在图1中所看到的无异常值时的决策边界也大不相同，可能无法很好地泛化。
 
-![fig03_硬间隔对异常值的敏感度]()
+![fig03_硬间隔对异常值的敏感度](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/fig03_%E7%A1%AC%E9%97%B4%E9%9A%94%E5%AF%B9%E5%BC%82%E5%B8%B8%E5%80%BC%E7%9A%84%E6%95%8F%E6%84%9F%E5%BA%A6.jpg)
 
 要避免这些问题，最好使用更灵活的模型。目标是尽可能在保持街道宽阔和限制间隔违例（即位于街道之上，甚至在错误的一边的实例）之间找到良好的平衡，这就是**软间隔分类**。
 
 使用Scikit-Learn创建SVM模型时，我们可以指定许多超参数。*C* 是这些超参数之一。如果将其设置为较低的值，则最终得到图4左侧的模型。如果设置为较高的值，我们得到右边的模型。间隔冲突很糟糕，通常最好要少一些。但是，在这种情况下，左侧的模型存在很多间隔违例的情况，但泛化效果可能会更好。
 
-![fig04_大间隔与更少的间隔冲突]()
+![fig04_大间隔与更少的间隔冲突](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/fig04_%E5%A4%A7%E9%97%B4%E9%9A%94%E4%B8%8E%E6%9B%B4%E5%B0%91%E7%9A%84%E9%97%B4%E9%9A%94%E5%86%B2%E7%AA%81.jpg)
 
 如果你的SVM模型过拟合，可以尝试通过降低*C* 来对其进行正则化。
 
 以下Scikit-Learn代码可加载鸢尾花数据集，缩放特征，然后训练线性SVM模型（使用`C=1`的`LinearSVC`类和稍后描述的hinge损失函数）来检测维吉尼亚鸢尾花：
 
 ```python
+    import numpy as np
+    from sklearn import datasets
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.svm import LinearSVC
 
+    iris = datasets.load_iris()
+    X = iris["data"][:, (2, 3)]  # petal length, petal width
+    y = (iris["target"] == 2).astype(np.float64)  # Iris virginica
+
+    svm_clf = Pipeline([
+            ("scaler", StandardScaler()),
+            ("linear_svc", LinearSVC(C=1, loss="hinge", random_state=42)),
+        ])
+
+    svm_clf.fit(X, y)
 ```
 
 **与Logistic回归分类器不同，SVM分类器不会输出每个类的概率**。
@@ -43,4 +58,48 @@ SVM对特征的缩放非常敏感，如下图所示，在左图中，垂直刻�
 `LinearSVC`类会对偏置项进行正则化，所以你需要先减去平均值，使训练集居中。如果使用`StandardScaler`会自动进行这一步。此外，请确保超参数`loss`设置为`"hinge"`，因为它不是默认值。最后，为了获得更好的性能，还应该将超参数`dual`设置为`False`，除非特征数量比训练实例还多（本章后文将会讨论）。
 
 ## 5.2 非线性SVM分类
+
+虽然在许多情况下，线性SVM分类器是有效的，并且通常出人意料的好，但是，有很多数据集远不是线性可分离的。处理非线性数据集的方法之一是添加更多特征，比如多项式特征（如第4章所述）。某些情况下，这可能导致数据集变得线性可分离。参见图5的左图：这是一个简单的数据集，只有一个特征x1。可以看出，数据集线性不可分。但是如果添加第二个特征x2=(x1)^2，生成的2D数据集则完全线性可分离。
+
+![fig05_通过添加特征使数据集线性可分离]()
+
+为了使用Scikit-Learn来实现这个想法，创建一个包含`PolynomialFeatures`转换器（见4.3节）的`Pipeline`，然后是`StandardScaler`和`LinearSVC`。让我们在卫星数据集上进行测试：这是一个用于二元分类的小数据集，其中数据点的形状为两个交织的半圆（见图6）。你可以使用`make_moons()`函数生成此数据集：
+
+```python
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import PolynomialFeatures
+
+    polynomial_svm_clf = Pipeline([
+        ("poly_features", PolynomialFeatures(degree=3)),
+        ("scaler", StandardScaler()),
+        ("svm_clf", LinearSVC(C=10, loss='hinge', random_state=42))
+    ])
+
+    polynomial_svm_clf.fit(X, y)
+```
+
+![fig06_使用多项式特征的线性SVM分类器]()
+
+### 5.2.1 多项式内核
+
+添加多项式特征实现起来非常简单，并且对所有的机器学习算法（不只是SVM）都非常有效。但问题是，如果多项式太低阶，则处理不了非常复杂的数据集。而高阶则会创造出大量的特征，导致模型变得太慢。
+
+幸运的是，使用SVM时，有一个魔术般的数学技巧可以应用，这就是**核技巧**（稍后解释）。它产生的结果就跟添加了许多多项式特征（甚至是非常高阶的多项式特征）一样，但实际上并不需要真的添加。因为实际没有添加任何特征，所以也就不存在数量爆炸的组合特征了。这个技巧由SVC类来实现，我们看看在卫星数据集上的测试：
+
+```python
+    from sklearn.svm import SVC
+    poly_kernel_svm_clf = Pipeline([
+        ("scaler", StandardScaler()),
+        ("svm_clf", SVC(kernel="poly", degree=3, coef0=1, C=5))
+    ])
+    poly_kernel_svm_clf.fit(X, y)
+```
+
+这段代码使用了一个3阶多项式内核训练SVM分类器。如图7的左图所示。而右图是另一个使用了10阶多项式核的SVM分类器。显然，如果模型过拟合，你应该降低多项式阶数；反过来，如果欠拟合，则可以尝试使之提升。超参数`coef0`控制的是**模型受高阶多项式还是低阶多项式影响的程度**。
+
+寻找正确的超参数值的常用方法是网格搜索（见第2章）。先进行一次粗略的网格搜索，然后在最好的值附近展开一轮更精细的网格搜索，这样通常会快一些。多了解每个超参数实际上是用来做什么的，有助于你在超参数空间层正确搜索。
+
+![fig07_多项式核的SVM分类器]()
+
+### 5.2.2 相似特征
 
