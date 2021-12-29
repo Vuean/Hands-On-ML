@@ -153,3 +153,33 @@ SVC则是基于`libsvm`库的，这个库的算法支持核技巧。训练时间
 
 ## 5.3 SVM回归
 
+正如前面提到的，SVM算法非常全面：它不仅支持线性和非线性分类，而且还支持线性和非线性回归。诀窍在于将目标反转一下：不再尝试拟合两个类之间可能的最宽街道的同时限制间隔违例，**SVM回归要做的是让尽可能多的实例位于街道上**，同时限制间隔违例（也就是不在街道上的实例）。街道的宽度由超参数ε控制。图11显示了用随机线性数据训练的两个线性SVM回归模型，一个间隔较大（ε=1.5），另一个间隔较小（ε=0.5）。
+
+![fig11_SVM回归]()
+
+在间隔内添加更多的实例不会影响模型的预测，所以这个模型被称为**ε不敏感**。
+
+你可以使用Scikit-Learn的`LinearSVR`类来执行线性SVM回归。以下代码生成如图11左图所示的模型（训练数据需要先缩放并居中）：
+
+```python
+    from sklearn.svm import LinearSVR
+    svm_reg = LinearSVR(epsilon=1.5)
+    svm_reg.fit(X, y)
+```
+
+要解决非线性回归任务，可以使用核化的SVM模型。例如，图12显示了在一个随机二次训练集上使用二阶多项式核的SVM回归。左图几乎没有正则化（C值很大），右图则过度正则化（C值很小）。
+
+![fig12_使用二阶多项式核的SVM回归]()
+
+以下代码使用Scikit-Learn的SVR类（支持核技巧）生成如图12左图所示的模型：
+
+```python
+    from sklearn.svm import SVR
+    svm_poly_reg = SVR(kernel="poly", degree=2, C=100, epsilon=0.1)
+    svm_poly_reg.fit(X, y)
+```
+
+SVR类是SVC类的回归等价物，`LinearSVR`类也是`LinearSVC`类的回归等价物。`LinearSVR`与训练集的大小线性相关（与`LinearSVC`一样），而SVR则在训练集变大时，变得很慢（SVC也一样）
+
+## 5.4 工作原理
+
