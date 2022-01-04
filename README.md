@@ -15,3 +15,5 @@
 [ 第五章 支持向量机](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter5/README.md)
 
 [第六章 决策树](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter6/README.md)
+
+[第七章 集成学习和随机森林]()
