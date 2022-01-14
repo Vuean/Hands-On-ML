@@ -17,3 +17,5 @@
 [第六章 决策树](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter6/README.md)
 
 [第七章 集成学习和随机森林](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/README.md)
+
+[第八章 降维]()
