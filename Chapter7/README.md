@@ -68,7 +68,7 @@
 
 换句话说，bagging和pasting都允许训练实例在多个预测器中被多次采样，但是**只有bagging允许训练实例被同一个预测器多次采样**。采样过程和训练过程如图4所示。
 
-![fig04_bagging和pasting]()
+![fig04_bagging和pasting](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig04_bagging%E5%92%8Cpasting.jpg)
 
 如图4所示，你可以通过不同的CPU内核甚至不同的服务器并行地训练预测器。类似地，预测也可以并行。这正是bagging和pasting方法如此流行的原因之一，它们非常易于扩展。
 
@@ -92,7 +92,7 @@ Scikit-Learn提供了一个简单的API，可用`BaggingClassifier`类进行bagg
 
 图5比较了两种决策边界，一种是单个决策树，一种是由500个决策树组成的bagging集成（来自前面的代码），二者均在卫星数据集上训练完成。可以看出，**集成预测的泛化效果很可能会比单独的决策树要好一些**：二者偏差相近，但是集成的方差更小（两边训练集上的错误数量差不多，但是集成的决策边界更规则）。
 
-![fig05_A single Decision Tree (left) versus a bagging ensemble of 500 trees (right)]()
+![fig05_A single Decision Tree (left) versus a bagging ensemble of 500 trees (right)](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig05_A%20single%20Decision%20Tree%20(left)%20versus%20a%20bagging%20ensemble%20of%20500%20trees%20(right).jpg)
 
 由于自举法给每个预测器的训练子集引入了更高的多样性，所以最后bagging比pasting的偏差略高，但这也意味着预测器之间的关联度更低，所以集成的方差降低。总之，bagging生成的模型通常更好，这也就是为什么它更受欢迎。但是，如果你有充足的时间和CPU资源，可以使用交叉验证来对bagging和pasting的结果进行评估，再做出最合适的选择。
 
@@ -180,7 +180,7 @@ Scikit-Learn会在训练后为每个特征自动计算该分数，然后对结�
 
 同样，如果在MNIST数据集上训练随机森林分类器（在第3章中介绍）并绘制每个像素的重要性，则会得到如图6所示的图像。
 
-![fig06_MNIST像素的重要性]()
+![fig06_MNIST像素的重要性](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig06_MNIST%E5%83%8F%E7%B4%A0%E7%9A%84%E9%87%8D%E8%A6%81%E6%80%A7.jpg)
 
 随机森林非常便于你快速了解哪些特征是真正重要的，特别是在需要执行特性选择时。
 
@@ -194,11 +194,11 @@ Scikit-Learn会在训练后为每个特征自动计算该分数，然后对结�
 
 例如，当训练AdaBoost分类器时，该算法**首先训练一个基础分类器**（例如决策树），并使用它对训练集进行预测。然后，**该算法会增加分类错误的训练实例的相对权重**。然后，它使用更新后的权重训练第二个分类器，并再次对训练集进行预测，更新实例权重，以此类推（见图7）。
 
-![fig07_AdaBoost循环训练]()
+![fig07_AdaBoost循环训练](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig07_AdaBoost%E5%BE%AA%E7%8E%AF%E8%AE%AD%E7%BB%83.jpg)
 
 图8显示了在卫星数据集上5个连续的预测器的决策边界（在本例中，每个预测器都使用RBF核函数的高度正则化的SVM分类器）。第一个分类器产生了许多错误实例，所以这些实例的权重得到提升。因此第二个分类器在这些实例上的表现有所提升，然后第三个、第四个......右图绘制的是相同预测器序列，唯一的差别在于**学习率减半**（即每次迭代仅提升一半错误分类的实例的权重）。可以看出，AdaBoost这种依序循环的学习技术跟梯度下降有一些异曲同工之处，差别只在于——不再是调整单个预测器的参数使成本函数最小化，而是不断在集成中加入预测器，使模型越来越好。
 
-![fig08_连续预测器的决策边界]()
+![fig08_连续预测器的决策边界](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig08_%E8%BF%9E%E7%BB%AD%E9%A2%84%E6%B5%8B%E5%99%A8%E7%9A%84%E5%86%B3%E7%AD%96%E8%BE%B9%E7%95%8C.jpg)
 
 一旦全部预测器训练完成，集成整体做出预测时就跟`bagging`或`pasting`方法一样了，除非预测器有不同的权重，因为它们总的准确率是基于加权后的训练集。
 
@@ -206,17 +206,17 @@ Scikit-Learn会在训练后为每个特征自动计算该分数，然后对结�
 
 让我们仔细看看AdaBoost算法。每个实例权重 $w^{(i)}$ 最初设置为 $1\over m$ 。对第一个预测器进行训练，并根据训练集计算其加权误差率r1，请参见公式7-1。
 
-![fig09_公式7-1_第j个预测器的加权误差率]()
+![fig09_公式7-1_第j个预测器的加权误差率](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig09_%E5%85%AC%E5%BC%8F7-1_%E7%AC%ACj%E4%B8%AA%E9%A2%84%E6%B5%8B%E5%99%A8%E7%9A%84%E5%8A%A0%E6%9D%83%E8%AF%AF%E5%B7%AE%E7%8E%87.jpg)
 
 $\hat y^{(i)}_j$ 是第i个实例的第j个预测器的预测。
 
 预测器的权重 $α_j$ 通过公式7-2来计算，其中η是学习率超参数（默认为1）。预测器的准确率越高，其权重就越高。如果它只是随机猜测，则其权重接近于零。但是，如果大部分情况下它都是错的（也就是准确率比随机猜测还低），那么它的权重为负。
 
-![fig10_公式7-2_预测器权重]()
+![fig10_公式7-2_预测器权重](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig10_%E5%85%AC%E5%BC%8F7-2_%E9%A2%84%E6%B5%8B%E5%99%A8%E6%9D%83%E9%87%8D.jpg)
 
 接下来，AdaBoost算法使用公式7-3更新实例权重，从而提高了误分类实例的权重。
 
-![fig11_公式7-3_权重更新规则]()
+![fig11_公式7-3_权重更新规则](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig11_%E5%85%AC%E5%BC%8F7-3_%E6%9D%83%E9%87%8D%E6%9B%B4%E6%96%B0%E8%A7%84%E5%88%99.jpg)
 
 然后对所有实例权重进行归一化（即除以 $\sum^m_{i=1}w^{(i)}$）。
 
@@ -224,7 +224,7 @@ $\hat y^{(i)}_j$ 是第i个实例的第j个预测器的预测。
 
 预测的时候，AdaBoost就是简单地计算所有预测器的预测结果，并使用预测器权重 $α_j$ 对它们进行加权。最后，得到大多数加权投票的类就是预测器给出的预测类（见公式7-4）。
 
-![fig12_公式7-4_AdaBoost预测]()
+![fig12_公式7-4_AdaBoost预测](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/figures/fig12_%E5%85%AC%E5%BC%8F7-4_AdaBoost%E9%A2%84%E6%B5%8B.jpg)
 
 其中N是预测器的数量。
 
@@ -245,3 +245,122 @@ Scikit-Learn使用的其实是AdaBoost的一个多分类版本，叫作SAMME（�
 
 ### 7.5.2 梯度提升
 
+另一个非常受欢迎的提升法是梯度提升。与AdaBoost一样，梯度提升也是**逐步在集成中添加预测器，每一个都对其前序做出改正**。不同之处在于，它不是像AdaBoost那样在每个迭代中调整实例权重，而是**让新的预测器针对前一个预测器的残差进行拟合**。
+
+我们来看一个简单的回归示例，使用决策树作为基础预测器（梯度提升当然也适用于回归任务），这被称为**梯度树提升**或者是**梯度提升回归树**（GBRT）。首先，在训练集（比如带噪声的二次训练集）上拟合一个`DecisionTreeRegressor`：
+
+```python
+    from sklearn.tree import DecisionTreeRegressor
+
+    tree_reg1 = DecisionTreeRegressor(max_depth =2, random_state =42)
+    tree_reg1.fit(X, y)
+```
+
+针对第一个预测器的残差，训练第二个`DecisionTreeRegressor`：
+
+```python
+    y2 = y - tree_reg1.predict(X)
+    tree_reg2 = DecisionTreeRegressor(max_depth=2, random_state=42)
+    tree_reg2.fit(X, y2)
+```
+
+针对第二个预测器的残差，训练第三个回归器：
+
+```python
+    y3 = y2 - tree_reg2.predict(X)
+
+    tree_reg3 = DecisionTreeRegressor(max_depth =2, random_state =42)
+    tree_reg3.fit(X, y3)
+```
+
+现在，我们有了一个包含三棵树的集成。它将所有树的预测相加，从而对新实例进行预测：
+
+```python
+    y_pred = sum(tree.predict(X_new) for tree in (tree_reg1, tree_reg2, tree_reg3))
+```
+
+图13的左侧表示这三棵树单独的预测，右侧表示集成的预测。第一行，集成只有一棵树，所以它的预测与第一棵树的预测完全相同。第二行是在第一棵树的残差上训练的一棵新树，从右侧可见，集成的预测等于前面两棵树的预测之和。类似地，第三行又有一棵在第二棵树的残差上训练的新树，集成的预测随着新树的添加逐渐变好。
+
+![fig13_梯度提升示例]
+
+训练GBRT集成有个简单的方法，就是使用Scikit-Learn的`GradientBoostingRegressor`类。与`RandomForestRegressor`类似，它具有控制决策树生长的超参数（例如`max_depth`、`min_samples_leaf`等），以及控制集成训练的超参数，例如树的数量（`n_estimators`）。以下代码可创建上面的集成：
+
+```python
+    from sklearn.ensemble import GradientBoostingRegressor
+
+    gbrt = GradientBoostingRegressor(max_depth=2, n_estimators=3, learning_rate=1.0)
+    gbrt.fit(X, y)
+```
+
+超参数`learning_rate`对每棵树的贡献进行缩放。如果你将其设置为低值，比如0.1，则需要更多的树来拟合训练集，但是预测的泛化效果通常更好，这是一种被称为**收缩的正则化技术**。图14显示了用低学习率训练的两个GBRT集成：左侧拟合训练集的树数量不足，而右侧拟合训练集的树数量过多从而导致过拟合。
+
+![fig14_GBRT集成]()
+
+要找到树的最佳数量，可以使用提前停止法（参见第4章）。简单的实现方法就是使用`staged_predict()`方法：它在训练的每个阶段（一棵树时，两棵树时，等等）都对集成的预测返回一个迭代器。以下代码训练了一个拥有120棵树的GBRT集成，然后测量每个训练阶段的验证误差，从而找到树的最优数量，最后使用最优树数重新训练了一个GBRT集成：
+
+```python
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_squared_error
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, random_state=49)
+
+    gbrt = GradientBoostingRegressor(max_depth=2, n_estimators=120, random_state=42)
+    gbrt.fit(X_train, y_train)
+
+    errors = [mean_squared_error(y_val, y_pred)
+            for y_pred in gbrt.staged_predict(X_val)]
+    bst_n_estimators = np.argmin(errors) + 1
+
+    gbrt_best = GradientBoostingRegressor(max_depth=2, n_estimators=bst_n_estimators, random_state=42)
+    gbrt_best.fit(X_train, y_train)
+```
+
+验证误差显示在图15的左侧，最佳模型的预测显示在右侧。
+
+![fig15_通过提前停止法调整树的数量]()
+
+实际上，要实现提前停止法，不一定需要先训练大量的树，然后再回头找最优的数字，还可以提前停止训练。设置`warm_start=True`，当`fit()`方法被调用时，Scikit-Learn会保留现有的树，从而允许增量训练。以下代码会在验证误差连续5次迭代未改善时，直接停止训练：
+
+```python
+    gbrt = GradientBoostingRegressor(max_depth=2, warm_start=True, random_state=42)
+
+    min_val_error = float("inf")
+    error_going_up = 0
+    for n_estimators in range(1, 120):
+        gbrt.n_estimators = n_estimators
+        gbrt.fit(X_train, y_train)
+        y_pred = gbrt.predict(X_val)
+        val_error = mean_squared_error(y_val, y_pred)
+        if val_error < min_val_error:
+            min_val_error = val_error
+            error_going_up = 0
+        else:
+            error_going_up += 1
+            if error_going_up == 5:
+                break  # early stopping
+```
+
+`GradientBoostingRegressor`类还可以支持超参数`subsample`，指定用于训练每棵树的实例的比例。例如，如果`subsample=0.25`，则每棵树用25%的随机选择的实例进行训练。现在你可以猜到，这也是用更高的偏差换取了更低的方差，同时在相当大的程度上加速了训练过程。这种技术被称为**随机梯度提升**。
+
+值得注意的是，流行的Python库XGBoost（该库代表Extreme Gradient Boosting）中提供了梯度提升的优化实现，该软件包最初是由Tianqi Chen作为分布式（深度）机器学习社区（DMLC）的一部分开发的，其开发目标是极快、可扩展和可移植。实际上，XGBoost通常是ML竞赛中获胜的重要组成部分。XGBoost的API与Scikit-Learn的非常相似。
+
+## 7.6 堆叠法
+
+本章我们要讨论的最后一个集成方法叫作**堆叠法（stacking）**，又称**层叠泛化法**。它基于一个简单的想法：与其使用一些简单的函数（比如硬投票）来聚合集成中所有预测器的预测，我们为什么不训练一个模型来执行这个聚合呢？图16显示了在新实例上执行回归任务的这样一个集成。底部的三个预测器分别预测了不同的值（3.1、2.7和2.9），然后最终的预测器（称为混合器或元学习器）将这些预测作为输入，进行最终预测（3.0）。
+
+![fig16_通过混合预测器聚合预测]()
+
+训练混合器的常用方法是使用**留存集**。我们看看它是如何工作的。首先，将训练集分为两个子集，第一个子集用来训练第一层的预测器（见图17）。
+
+![fig17_训练第一层]()
+
+然后，用第一层的预测器在第二个（留存）子集上进行预测（见图18）。因为预测器在训练时从未见过这些实例，所以可以确保预测是“干净的”。那么现在对于留存集中的每个实例都有了三个预测值。我们可以使用这些预测值作为输入特征，创建一个新的训练集（新的训练集有三个维度），并保留目标值。在这个新的训练集上训练混合器，让它学习根据第一层的预测来预测目标值。
+
+![fig18_训练混合器]()
+
+事实上，通过这种方法可以训练多种不同的混合器（例如，一个使用线性回归，另一个使用随机森林回归，等等）。于是我们可以得到一个混合器层。诀窍在于将训练集分为三个子集：**第一个用来训练第一层，第二个用来创造训练第二层的新训练集（使用第一层的预测），而第三个用来创造训练第三层的新训练集（使用第二层的预测）**。一旦训练完成，我们可以按照顺序遍历每层来对新实例进行预测，如图19所示。
+
+![fig19_一个多层堆叠集成的预测]()
+
+不幸的是，Scikit-Learn不直接支持堆叠，但是推出自己的实现并不太难（参见接下来的练习题）。或者，你也可以使用开源的实现方案，例如DESlib。
