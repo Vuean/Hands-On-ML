@@ -19,3 +19,5 @@
 [第七章 集成学习和随机森林](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter7/README.md)
 
 [第八章 降维](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter8/README.md)
+
+[第九章 无监督学习技术](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter9/README.md)
