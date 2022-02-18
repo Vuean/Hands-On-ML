@@ -571,4 +571,230 @@ _________________________________________________________________
     y_pred = model.predict(X_new)
 ```
 
-P308
+在许多用例中，你可能需要多个输出：
+
+- 这个任务可能会需要它。例如，你可能想在图片中定位和分类主要物体。这既是回归任务（查找物体中心的坐标以及宽度和高度），又是分类任务。
+
+- 同样，你可能有基于同一数据的多个独立任务。当然你可以为每个任务训练一个神经网络，但是在许多情况下，通过训练每个任务一个输出的单个神经网络会在所有任务上获得更好的结果。这是因为神经网络可以学习数据中对任务有用的特征。例如，你可以对面部图片执行多任务分类，使用一个输出对人的面部表情进行分类（微笑、惊讶等），使用另一个输出来识别他们是否戴着眼镜。
+
+- 另一个示例是作为正则化技术（即训练约束，其目的是减少过拟合，从而提高模型的泛化能力）。例如，你可能希望在神经网络结构中添加一些辅助输出（见图19），以确保网络的主要部分自己能学习有用的东西，而不依赖于网络的其余部分。
+
+![fig19_正则化]()
+
+添加额外的输出非常容易：只需将它们连接到适当的层，然后将它们添加到模型的输出列表中即可。例如，以下代码构建了如图19所示的网络：
+
+```python
+   input_A = keras.layers.Input(shape=[5], name="wide_input")
+    input_B = keras.layers.Input(shape=[6], name="deep_input")
+    hidden1 = keras.layers.Dense(30, activation="relu")(input_B)
+    hidden2 = keras.layers.Dense(30, activation="relu")(hidden1)
+    concat = keras.layers.concatenate([input_A, hidden2])
+    output = keras.layers.Dense(1, name="main_output")(concat)
+    aux_output = keras.layers.Dense(1, name="aux_output")(hidden2)
+    model = keras.models.Model(inputs=[input_A, input_B],
+                            outputs=[output, aux_output]) 
+```
+
+每个输出都需要自己的损失函数。因此当我们编译模型时，应该传递一系列损失（如果传递单个损失，Keras将假定所有输出必须使用相同的损失）。默认情况下，Keras将计算所有这些损失，并将它们简单累加即可得到用于训练的最终损失。我们更关心主要输出而不是辅助输出（因为它仅用于正则化），因此我们要给主要输出的损失更大的权重。幸运的是，可以在编译模型时设置所有的损失权重：
+
+```python
+    model.compile(loss=["mse", "mse"], loss_weights=[0.9, 0.1], optimizer=keras.optimizers.SGD(lr=1e-3))
+```
+
+现在当训练模型时，需要为每个输出提供标签。在此示例中，主要输出和辅助输出应预测出相同的结果，因此它们应使用相同的标签。除了传递`y_train`之外，还需要传递`(y_train, y_train)`（对于`y_valid`和`y_test`也是如此）：
+
+```python
+    history = model.fit([X_train_A, X_train_B], [y_train, y_train], epochs=20,
+                        validation_data=([X_valid_A, X_valid_B], [y_valid, y_valid]))
+```
+
+当评估模型时，Keras将返回总损失以及所有单个损失，同样，`predict()`方法将为每个输出返回预测值：
+
+```python
+    total_loss, main_loss, aux_loss = model.evaluate(
+    [X_test_A, X_test_B], [y_test, y_test])
+    y_pred_main, y_pred_aux = model.predict([X_new_A, X_new_B]) 
+```
+
+如你所见，你可以使用函数式API轻松构建所需的任何网络结构。让我们看一下构建Keras模型的最后一种方法。
+
+### 10.2.5 使用子类API构建动态模型
+
+顺序API和函数式API都是声明性的：首先声明要使用的层以及应该如何连接它们，然后才能开始向模型提供一些数据进行训练或推断。这具有许多优点：可以轻松地保存、克隆和共享模型；可以显示和分析它的结构；框架可以推断形状和检查类型，因此可以及早发现错误（即在任何数据通过模型之前）。由于整个模型是一个静态图，因此调试起来也相当容易。但另一方面是它是静态的。一些模型涉及循环、变化的形状、条件分支和其他动态行为。对于这种情况，或者只是你喜欢命令式的编程风格，则子类API非常适合你。
+
+只需对Model类进行子类化，在构造函数中创建所需的层，然后在`call()`方法中执行所需的计算即可。例如，创建以下WideAndDeepModel类的实例将给我们一个等效于刚刚使用函数式API构建的模型。然后，你可以像我们刚做的那样对其进行编译、评估并使用它进行预测：
+
+```python
+    class WideAndDeepModel(keras.models.Model):
+        def __init__(self, units=30, activation="relu", **kwargs):
+            super().__init__(**kwargs)
+            self.hidden1 = keras.layers.Dense(units, activation=activation)
+            self.hidden2 = keras.layers.Dense(units, activation=activation)
+            self.main_output = keras.layers.Dense(1)
+            self.aux_output = keras.layers.Dense(1)
+            
+        def call(self, inputs):
+            input_A, input_B = inputs
+            hidden1 = self.hidden1(input_B)
+            hidden2 = self.hidden2(hidden1)
+            concat = keras.layers.concatenate([input_A, hidden2])
+            main_output = self.main_output(concat)
+            aux_output = self.aux_output(hidden2)
+            return main_output, aux_output
+
+    model = WideAndDeepModel(30, activation="relu")
+```
+
+这个示例看起来非常类似于函数式API，只是我们不需要创建输入。我们只使用`call()`方法的输入参数，就可以将构造函数中层的创建与其在`call()`方法中的用法分开。最大的区别是你可以在`call()`方法中执行几乎所有你想做的操作：for循环、if语句、底层TensorFlow操作，等等（见第12章）。这使得它成为研究新想法的研究人员的绝佳API。
+
+这种额外的灵活性的确需要付出一定的代价：模型的架构隐藏在`call()`方法中，因此Keras无法对其进行检查。它无法保存或克隆。当你调用`summary()`方法时，你只会得到一个图层列表，而没有有关它们如何相互连接的信息。而且Keras无法提前检查类型和形状，并且更容易出错。因此，除非你确实需要这种额外的灵活性，否则你应该坚持使用顺序API或函数式API。
+
+Keras模型可以像常规层一样使用，因此你可以轻松地将它们组合以构建复杂的结构。
+
+现在你知道如何使用Keras构建和训练神经网络了，那么如何保存它们呢？
+
+### 10.2.6 保存和还原模型
+
+使用顺序API或函数式API时，保存训练好的Keras模型非常简单：
+
+```python
+    model = keras.models.Sequential([
+    keras.layers.Dense(30, activation="relu", input_shape=[8]),
+    keras.layers.Dense(30, activation="relu"),
+    keras.layers.Dense(1)
+])    
+```
+
+Keras使用HDF5格式保存模型的结构（包括每一层的超参数）和每一层的所有模型参数值（例如，连接权重和偏置）。它还可以保存优化器（包括其超参数及其可能具有的任何状态）。在第19章，我们可以看到如何使用Tensorflow的SavedModel格式来保存一个tf.keras模型。
+
+通常你有一个训练模型并保存模型的脚本，以及一个或多个加载模型并使用其进行预测的脚本（或Web服务）。加载模型同样简单：
+
+```python
+    model = keras.models.load_model("my_keras_model.h5")
+```
+
+当使用顺序API或函数式API时，这是适用的，但不幸的是，在使用模型子类化时，它将不起作用。你至少可以使用`save_weights()`和`load_weights()`来保存和还原模型参数，但是你需要自己保存和还原其他所有内容。
+
+但是，如果训练持续几个小时怎么办？这是很常见的，尤其是在大型数据集上进行训练时。在这种情况下，你不仅应该在训练结束时保存模型，还应该在训练过程中定期保存检查点，以免在计算机崩溃时丢失所有内容。但是如何告诉`fit()`方法保存检查点呢？使用回调。
+
+### 10.2.7 使用回调函数
+
+`fit()`方法接受一个callbacks参数，该参数使你可以指定Keras在训练开始和结束时，每个轮次的开始和结束时（甚至在处理每个批量之前和之后）将调用的对象列表。例如，在训练期间ModelCheckpoint回调会定期保存模型的检查点，默认情况下，在每个轮次结束时：
+
+```python
+        model.compile(loss="mse", optimizer=keras.optimizers.SGD(lr=1e-3))
+    checkpoint_cb = keras.callbacks.ModelCheckpoint("my_keras_model.h5", save_best_only=True)
+    history = model.fit(X_train, y_train, epochs=10,
+                        validation_data=(X_valid, y_valid),
+                        callbacks=[checkpoint_cb])
+    model = keras.models.load_model("my_keras_model.h5") # rollback to best model
+    mse_test = model.evaluate(X_test, y_test)
+```
+
+此外，如果在训练期间使用验证集，则可以在创建ModelCheckpoint时设置`save_best_only=True`。在这种情况下，只有在验证集上的模型性能达到目前最好时，它才会保存模型。这样，你就不必担心训练时间太长而过拟合训练集：只需还原训练后保存的最后一个模型，这就是验证集中的最佳模型。以下代码是实现提前停止的简单方法（见第4章）：
+
+```python
+    model.compile(loss="mse", optimizer=keras.optimizers.SGD(lr=1e-3))
+    checkpoint_cb = keras.callbacks.ModelCheckpoint("my_keras_model.h5", save_best_only=True)
+    history = model.fit(X_train, y_train, epochs=10,
+                        validation_data=(X_valid, y_valid),
+                        callbacks=[checkpoint_cb])
+    model = keras.models.load_model("my_keras_model.h5") # rollback to best model
+    mse_test = model.evaluate(X_test, y_test)
+```
+
+实现提前停止的另一种方法是使用EarlyStopping回调。如果在多个轮次（由`patience`参数定义）的验证集上没有任何进展，它将中断训练，并且可以选择回滚到最佳模型。你可以将两个回调结合起来以保存模型的检查点（以防计算机崩溃），并在没有更多进展时尽早中断训练（以避免浪费时间和资源）：
+
+```python
+    early_stopping_cb = keras.callbacks.EarlyStopping(patience=10,
+                                                    restore_best_weights=True)
+    history = model.fit(X_train, y_train, epochs=100,
+                        validation_data=(X_valid, y_valid),
+                        callbacks=[checkpoint_cb, early_stopping_cb])
+```
+
+可以将轮次数设置为较大的值，因为训练将在没有更多进展时自动停止。在这种情况下，无须还原保存的最佳模型，因为EarlyStopping回调将跟踪最佳权重，并在训练结束时为你还原它。
+
+如果需要额外的控制，则可以轻松编写自己的自定义回调。作为如何执行的示例，以下自定义回调将显示训练过程中验证损失与训练损失之间的比率（例如，检测过拟合）：
+
+```python
+    class PrintValTrainRatioCallback(keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs):
+            print("\nval/train: {:.2f}".format(logs["val_loss"] / logs["loss"]))
+```
+
+现在让我们看看使用tf.keras时肯定应该在工具箱中有的另一种工具：TensorBoard。
+
+### 10.2.8 使用TensorBoard进行可视化
+
+TensorBoard是一款出色的交互式可视化工具，可用于在训练期间查看学习曲线；比较多次运行的学习曲线；可视化计算图；分析训练统计数据；查看由模型生成的图像；把复杂的多维数据投影到3D，自动聚类并进行可视化，等等！安装TensorFlow时会自动安装此工具，因此你已经拥有了它。
+
+要使用它，你必须修改程序以便将要可视化的数据输出到名为事件文件的特殊二进制日志文件中。每个二进制数据记录称为摘要。TensorBoard服务器将监视日志目录，并将自动获取更改并更新可视化效果：这使你可以可视化实时数据（有短暂延迟），例如训练期间的学习曲线。通常你需要把TensorBoard服务器指向根日志目录并配置程序，以使其在每次运行时都写入不同的子目录。这样相同的TensorBoard服务器实例可以使你可视化并比较程序多次运行中的数据，而不会混淆所有内容。
+
+让我们首先定义用于TensorBoard日志的根日志目录，再加上一个将根据当前日期和时间生成一个子目录的函数，以便每次运行时都不同。你可能希望在日志目录中包含其他信息，例如你正在测试的超参数值，以使你更容易知道在TensorBoard中查看的内容：
+
+```python
+    import os
+    root_logdir = os.path.join(os.curdir, "my_logs")
+
+    def get_run_logdir():
+        import time
+        run_id = time.strftime("run_%Y_%m_%d-%H_%M_%S")
+        return os.path.join(root_logdir, run_id)
+
+    run_logdir = get_run_logdir()
+    run_logdir
+```
+
+好消息是Keras提供了一个不错的`TensorBoard()`回调：
+
+```python
+    model = keras.models.Sequential([
+        keras.layers.Dense(30, activation="relu", input_shape=[8]),
+        keras.layers.Dense(30, activation="relu"),
+        keras.layers.Dense(1)
+    ])    
+    model.compile(loss="mse", optimizer=keras.optimizers.SGD(lr=1e-3))
+
+    tensorboard_cb = keras.callbacks.TensorBoard(run_logdir)
+    history = model.fit(X_train, y_train, epochs=30,
+                        validation_data=(X_valid, y_valid),
+                        callbacks=[checkpoint_cb, tensorboard_cb])
+```
+
+这就是全部！不难使用。如果运行此代码，`TensorBoard()`回调将为你创建日志目录（如果需要，还有父目录），并且在训练期间它将创建事件文件并向其写入摘要。第二次运行该程序（也许更改某些超参数值）后，你将得到一个类似于以下内容的目录结构：
+
+```python
+
+```
+
+每次运行有一个目录，每个目录包含一个用于训练日志的子目录和一个用于验证日志的子目录。两者都包含事件文件，但是训练日志还包含概要分析跟踪：这使TensorBoard可以准确显示模型在所有设备上花费在模型各部分上的时间，对于查找性能瓶颈非常有用。
+
+接下来，你需要启动TensorBoard服务器。一种方法是在终端中运行命令。如果你在虚拟环境中安装了TensorFlow，则应将其激活。接下来在项目的根目录（或从任何其他位置，只要指向适当的日志目录）运行以下命令：
+
+```python
+    $ tensorboard --logdir=./my_logs --port=6006
+    TensorBoard 2.0.0 at http://mycomputer.local:6006/ (Press CTRL+C to quit)
+```
+
+如果你的终端找不到tensorboard脚本，那你必须更新PATH环境变量，以便它包含脚本安装目录（或者你可以在命令行中用python3-m tensorboard.main替换tensorboard）。服务器启动后，你可以打开Web浏览器并转到http://localhost:6006。
+
+或者你可以直接在Jupyter中运行以下命令来使用TensorBoard。第一行加载TensorBoard扩展，第二行在端口6006上启动TensorBoard服务器（除非它已经启动）并连接到它：
+
+```python
+    %load_ext tensorboard
+    %tensorboard --logdir=./my_logs --port=6006
+```
+
+无论用哪种方式，你都应该看到TensorBoard的Web界面。单击“SCALARS”选项卡以查看学习曲线（见图10-17）。在左下方，选择要显示的日志（例如，第一次和第二次运行的训练日志），然后单击epoch_loss标量。请注意两次运行的训练损失都下降得很好，但是第二次下降得更快。实际上，我们使用的学习率为0.05（optimizer=keras.optimizers.SGD（lr=0.05）），而不是0.001。
+
+你还可以可视化整个图形、学习的权重（投影到3D）或分析跟踪。`TensorBoard()`回调也具有记录额外数据的选项，例如嵌入：
+
+![fig20_用TensorBoard可视化学习曲线]()
+
+此外，TensorFlow在tf.summary包中提供了一个较底层的API。以下代码使用`create_file_writer()`函数创建一个S ummaryWriter，并将该函数用作上下文来记录标量、直方图、图像、音频和文本，然后可以使用TensorBoard将其可视化（尝试一下！）
+
+让我们总结一下你到目前为止在本章中学到的知识：我们了解了神经网络的来源，MLP是什么以及如何将其用于分类和回归，如何使用tf.keras的顺序API来构建MLP，以及如何使用函数式API或子类API来构建更复杂的模型架构。你学习了如何保存和还原模型，以及如何使用回调函数来保存检查点，提前停止，等等。最后，你学习了如何使用TensorBoard进行可视化。你已经可以使用神经网络来解决许多问题了！但是，你可能想知道如何选择隐藏层的数量、网络中神经元的数量以及所有其他超参数。让我们现在来看一下。
+
+## 10.3 微调神经网络超参数
+
