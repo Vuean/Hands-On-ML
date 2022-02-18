@@ -430,7 +430,7 @@ _________________________________________________________________
 
 `fit()`方法返回一个History对象，其中包含训练参数（`history.params`）、经历的轮次列表（`history.epoch`），最重要的是包含在训练集和验证集（如果有）上的每个轮次结束时测得的损失和额外指标的字典（`history.history`）。如果使用此字典创建pandas DataFrame并调用其`plot()`方法，则会获得如图15所示的学习曲线：
 
-![fig15_学习曲线]()
+![fig15_学习曲线](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter10/figures/fig15_%E5%AD%A6%E4%B9%A0%E6%9B%B2%E7%BA%BF.jpg)
 
 你可以看到训练期间训练准确率和验证准确率都在稳步提高，而训练损失和验证损失则在下降。好！而且，验证曲线与训练曲线很接近，这意味着没有太多的过拟合。在这种特殊情况下，该模型看起来在验证集上的表现要好于训练开始时在训练集上的表现。但是事实并非如此：确实，验证误差是在每个轮次结束时计算的，而训练误差是使用每个轮次的运行平均值计算的。因此，训练曲线应向左移动半个轮次。如果这样做，你会看到训练和验证曲线在训练开始时几乎完全重叠。
 
@@ -476,7 +476,7 @@ _________________________________________________________________
 
 在这里，分类器实际上对所有三个图像进行了正确分类（图像如图16所示）：
 
-![fig16_正确分类的Fashion MNIST图像]()
+![fig16_正确分类的Fashion MNIST图像](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter10/figures/fig16_%E6%AD%A3%E7%A1%AE%E5%88%86%E7%B1%BB%E7%9A%84Fashion%20MNIST%E5%9B%BE%E5%83%8F.jpg)
 
 ```python
     y_new = y_test[:3]
@@ -506,3 +506,69 @@ _________________________________________________________________
     X_test = scaler.transform(X_test)
 ```
 
+使用顺序API来构建、训练、评估和使用回归MLP进行预测与我们进行分类非常相似。主要区别在于输出层只有一个神经元（因为我们只预测一个单值），并且不使用激活函数，而损失函数是均方误差。由于数据集噪声很大，我们只使用比以前少的神经元的单层隐藏层，以避免过拟合：
+
+```python
+    model = keras.models.Sequential([
+        keras.layers.Dense(30, activation="relu", input_shape=X_train.shape[1:]),
+        keras.layers.Dense(1)
+    ])
+    model.compile(loss="mean_squared_error", optimizer=keras.optimizers.SGD(lr=1e-3))
+    history = model.fit(X_train, y_train, epochs=20, validation_data=(X_valid, y_valid))
+    mse_test = model.evaluate(X_test, y_test)
+    X_new = X_test[:3]
+    y_pred = model.predict(X_new)
+```
+
+如你所见，顺序API非常易于使用。但是尽管顺序模型非常普遍，但有时构建具有更复杂拓扑结构或具有多个输入或输出的神经网络还是常见的。为此，Keras提供了函数式API。
+
+### 10.2.4 使用函数式API构建复杂模型
+
+非顺序神经网络的一个示例是“宽深”神经网络。这种神经网络架构是由Heng-Tze Cheng等人在2016年发表的论文引入的。它将所有或部分输入直接连接到输出层，如图17所示。这种架构使神经网络能够学习深度模式（使用深度路径）和简单规则（通过短路径）。相比之下，常规的MLP迫使所有数据流经整个层的堆栈。
+
+![fig17_宽深神经网络]()
+
+因此，数据的简单模式最终可能会因为顺序被转换而失真。
+
+让我们建立这样一个神经网络来解决加州的住房问题：
+
+```python
+    input_ = keras.layers.Input(shape=X_train.shape[1:])
+    hidden1 = keras.layers.Dense(30, activation="relu")(input_)
+    hidden2 = keras.layers.Dense(30, activation="relu")(hidden1)
+    concat = keras.layers.concatenate([input_, hidden2])
+    output = keras.layers.Dense(1)(concat)
+    model = keras.models.Model(inputs=[input_], outputs=[output])
+```
+
+让我们遍历这段代码的每一行：
+
+- 首先，我们需要创建一个Input对象。这是模型需要的输入类型的规范，包括其`shape`和`dtype`。我们很快就会看到，一个模型实际上可能有多个输入。
+
+- 接下来，我们创建一个包含30个神经元的Dense层，使用ReLU激活函数。创建它后，请注意，我们像调用函数一样将其传递给输入。这就是将其称为函数式API的原因。注意，我们只是在告诉Keras它应该如何将各层连接在一起。尚未处理任何实际数据。
+
+- 然后，我们创建第二个隐藏层，然后再次将其用作函数。请注意，我们将第一个隐藏层的输出传递给它。
+
+- 接下来，我们创建一个Concatenate层，再次像函数一样立即使用它来合并输入和第二个隐藏层的输出。你可能更喜欢`keras.layers.concatenate()`函数，该函数创建一个`Concatenate`层并立即使用给定的输入对其进行调用。
+
+- 然后我们创建具有单个神经元且没有激活函数的输出层，然后像函数一样调用它，将合并结果传递给它。
+
+- 最后，我们创建一个Keras Model，指定要使用的输入和输出。
+
+一旦构建了Keras模型，一切都与之前的一样，因此无须在此处重复：你必须编译模型，对其进行训练，评估并使用它来进行预测。
+
+但是如果你想通过宽路径送入特征的子集，而通过深路径送入特征的另一个子集（可能有重合）呢（见图18）？在这种情况下，一种解决方案是使用多个输入。例如，假设我们要通过宽路径送入5个特征（特征0到4），并通过深路径送入6个特征（特征2到7）：
+
+![fig18_处理多输入]()
+
+该代码是不言自明的。你应该至少命名最重要的层，尤其是当模型变得有点复杂时。请注意，在创建模型时，我们指定了`input=[input_A,input_B]`。现在我们可以像往常一样编译模型了，但是当我们调用`fit()`方法时，必须传递一对矩阵`(X_train_A,X_train_B)`：各输入一个矩阵，而不是传递单个输入矩阵`X_train`。当你调用`evaluate()`或`predict()`时，X_valid、X_test和X_new同样如此：
+
+```python
+    model.compile(loss="mean_squared_error", optimizer=keras.optimizers.SGD(lr=1e-3))
+    history = model.fit(X_train, y_train, epochs=20,
+                        validation_data=(X_valid, y_valid))
+    mse_test = model.evaluate(X_test, y_test)
+    y_pred = model.predict(X_new)
+```
+
+P308
