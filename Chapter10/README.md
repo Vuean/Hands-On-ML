@@ -579,7 +579,7 @@ _________________________________________________________________
 
 - 另一个示例是作为正则化技术（即训练约束，其目的是减少过拟合，从而提高模型的泛化能力）。例如，你可能希望在神经网络结构中添加一些辅助输出（见图19），以确保网络的主要部分自己能学习有用的东西，而不依赖于网络的其余部分。
 
-![fig19_正则化]()
+![fig19_正则化](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter10/figures/fig19_%E6%AD%A3%E5%88%99%E5%8C%96.jpg)
 
 添加额外的输出非常容易：只需将它们连接到适当的层，然后将它们添加到模型的输出列表中即可。例如，以下代码构建了如图19所示的网络：
 
@@ -790,7 +790,7 @@ TensorBoard是一款出色的交互式可视化工具，可用于在训练期间
 
 你还可以可视化整个图形、学习的权重（投影到3D）或分析跟踪。`TensorBoard()`回调也具有记录额外数据的选项，例如嵌入：
 
-![fig20_用TensorBoard可视化学习曲线]()
+![fig20_用TensorBoard可视化学习曲线](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter10/figures/fig20_%E7%94%A8TensorBoard%E5%8F%AF%E8%A7%86%E5%8C%96%E5%AD%A6%E4%B9%A0%E6%9B%B2%E7%BA%BF.jpg)
 
 此外，TensorFlow在tf.summary包中提供了一个较底层的API。以下代码使用`create_file_writer()`函数创建一个S ummaryWriter，并将该函数用作上下文来记录标量、直方图、图像、音频和文本，然后可以使用TensorBoard将其可视化（尝试一下！）
 
