@@ -24,4 +24,4 @@
 
 [第十章 Keras人工神经网络简介](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter10/README.md)
 
-[# 第十一章 训练深度神经网络](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter11/README.md)
+[第十一章 训练深度神经网络](https://github.com/Vuean/Hands-On-ML/blob/main/Chapter11/README.md)
