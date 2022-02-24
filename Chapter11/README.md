@@ -583,3 +583,84 @@ LearningRateScheduler将在每个轮次开始时更新优化器的learning_rate�
 总而言之，指数衰减、性能调度和1周期都可以大大加快收敛速度，因此请尝试一下！
 
 ## 11.4 过正则化避免过拟合
+
+拥有数千个参数，你可以拟合出整个动物园。深度神经网络通常具有数万个参数，有时甚至有数百万个。这给它们带来了难以置信的自由度，意味着它们可以拟合各种各样的复杂数据集。但是，这种巨大的灵活性也使网络易于过拟合训练集。我们需要正则化。我们已经在第10章中实现了最好的正则化技术之一：提前停止。而且，即使“批量归一化”被设计用来解决不稳定的梯度问题，它的作用也像一个很好的正则化。在本节中，我们将研究其他流行的神经网络正则化技术：$\ell_1$和$\ell_2$正则化、dropout和最大范数正则化。
+
+### 11.4.1 $\ell_1$ 和 $\ell_2$ 正则化
+
+就像在第4章中对简单线性模型所做的一样，可以使用$\ell_2$正则化来约束神经网络的连接权重，如果想要稀疏模型（许多权重等于0）则可以使用$\ell_1$正则化。以下是使用0.01的正则化因子将$\ell_2$正则化应用于Keras层的连接权重的方法：
+
+```python
+    layer = keras.layers.Dense(100, activation="elu",
+                            kernel_initializer="he_normal",
+                            kernel_regularizer=keras.regularizers.l2(0.01))
+    # or l1(0.1) for ℓ1 regularization with a factor or 0.1
+    # or l1_l2(0.1, 0.01) for both ℓ1 and ℓ2 regularization, with factors 0.1 and 0.01 respectively
+```
+
+`l2()`函数返回一个正则化函数，在训练过程中的每个步骤都将调用该正则化函数来计算正则化损失。然后将其添加到最终损失中。如你所料，如果需要$\ell_1$正则化，可以只使用`keras.regularizers.l1()`。如果你同时需要$\ell_1$和$\ell_2$正则化，请使用`keras.regularizers.l1_l2()`（同时指定两个正则化因子）。
+
+由于你通常希望将相同的正则化函数应用于网络中的所有层，并在所有隐藏层中使用相同的激活函数和相同的初始化策略，因此你可能会发现自己重复了相同的参数。这使代码很难看且容易出错。为了避免这种情况，你可以尝试使用循环来重构代码。另一种选择是使用Python的`functools.partial()`函数，该函数可以使你为带有一些默认参数值的任何可调用对象创建一个小的包装函数：
+
+```python
+    model = keras.models.Sequential([
+        keras.layers.Flatten(input_shape=[28, 28]),
+        keras.layers.Dense(300, activation="elu",
+                        kernel_initializer="he_normal",
+                        kernel_regularizer=keras.regularizers.l2(0.01)),
+        keras.layers.Dense(100, activation="elu",
+                        kernel_initializer="he_normal",
+                        kernel_regularizer=keras.regularizers.l2(0.01)),
+        keras.layers.Dense(10, activation="softmax",
+                        kernel_regularizer=keras.regularizers.l2(0.01))
+    ])
+    model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam", metrics=["accuracy"])
+    n_epochs = 2
+    history = model.fit(X_train_scaled, y_train, epochs=n_epochs,
+                        validation_data=(X_valid_scaled, y_valid))
+```
+
+### 11.4.2 dropout
+
+对于深度神经网络，dropout是最受欢迎的正则化技术之一。它是由Geoffrey Hinton在2012年的论文中提出的，并且在Nitish Srivastava等人2014年的论文中得到了进一步的详述，已被证明是非常成功的：只需要增加dropout，即使最先进的神经网络也能获得1～2%的准确率提升。这听起来可能不算很多，但是当模型已经具有95％的准确率时，将准确率提高2％意味着将错误率降低了近40％（从5％的错误率降低到大约3％）。
+
+这是一个非常简单的算法：在每个训练步骤中，每个神经元（包括输入神经元，但始终不包括输出神经元）都有暂时“删除”的概率p，这意味着在这个训练步骤中它被完全忽略，但在下一步中可能处于活动状态（见图17）。超参数p称为dropout率，通常设置为10％到50％：在循环神经网络中接近20～30％（见第15章），在卷积神经网络中接近40～50％（见第14章）。训练后，神经元不再被删除。这就是全部内容（除了一个技术细节，我们马上进行讨论）。
+
+![fig17_使用dropout正则化]()
+
+首先令人惊讶的是，这种破坏性技术完全有效。如果公司告诉员工每天早上扔硬币来决定是否去上班，公司的业绩会更好吗？好吧，谁知道呢？也许会！该公司将被迫调整其组织结构。它不能依靠任何一个人来操作咖啡机或执行任何其他关键任务，因此必须将这种专业知识分散到多个人中。员工必须学会与许多同事合作，而不仅仅是少数几个。该公司将变得更具弹性。如果一个人辞职，不会有太大的区别。尚不清楚这种想法是否真的适用于公司，但它确实适用于神经网络。经过dropout训练的神经元不能与其相邻的神经元相互适应，它们必须自己发挥最大的作用。它们也不能过分依赖少数输入神经元，它们必须注意每个输入神经元。它们最终对输入的微小变化不太敏感。最后，你将获得一个更有鲁棒性的网络，该网络有更好的泛化能力。
+
+了解dropout能力的另一种方法是认识到在每个训练步骤中都会生成一个独特的神经网络。由于每个神经元都可以存在或不存在，因此共有2N个可能的网络（其中N是可以dropout神经元的总数）。这是一个巨大的数字，几乎不可能对同一神经网络进行两次采样。一旦你运行了10000个训练步骤，你实质上就已经训练了10000个不同的神经网络（每个神经网络只有一个训练实例）。这些神经网络显然不是独立的，因为它们共享许多权重，但是它们却是完全不同的。所得的神经网络可以看作是所有这些较小的神经网络的平均集成。
+
+在实践中，你通常只可以对第一至第三层（不包括输出层）中的神经元应用
+dropout。
+
+有一个很小但很重要的技术细节。假设p=50％，在这种情况下，在测试过程中，一个神训练深度神经网络被连接到输入神经元的数量是训练期间（平均）的两倍。为了弥补这一事实，我们需要在训练后将每个神经元的输入连接权重乘以0.5。如果不这样做，每个神经元得到的总输入信号大约是网络训练时的两倍，表现可能不会很好。更一般而言，训练后我们需要将每个输入连接权重乘以保留概率（1-p）。或者，我们可以在训练过程中将每个神经元的输出除以保留概率（这些替代方法不是完全等效的，但效果一样好）。
+
+要使用Keras实现dropout，可以使用keras.layers.Dropout层。在训练期间，它会随机丢弃一些输入（将它们设置为0），然后将其余输入除以保留概率。训练之后，它什么都不做，只是将输入传递到下一层。以下代码使用0.2的dropout率在每个Dense层之前应用dropout正则化：
+
+```python
+    model = keras.models.Sequential([
+        keras.layers.Flatten(input_shape=[28, 28]),
+        keras.layers.Dropout(rate=0.2),
+        keras.layers.Dense(300, activation="elu", kernel_initializer="he_normal"),
+        keras.layers.Dropout(rate=0.2),
+        keras.layers.Dense(100, activation="elu", kernel_initializer="he_normal"),
+        keras.layers.Dropout(rate=0.2),
+        keras.layers.Dense(10, activation="softmax")
+    ])
+    model.compile(loss="sparse_categorical_crossentropy", optimizer="nadam", metrics=["accuracy"])
+    n_epochs = 2
+    history = model.fit(X_train_scaled, y_train, epochs=n_epochs,
+                        validation_data=(X_valid_scaled, y_valid))
+```
+
+由于dropout仅在训练期间激活，因此比较训练损失和验证损失可能会产生误导。具体而言，模型可能会过拟合训练集，但仍具有相似的训练损失和验证损失。因此，请确保没有使用dropout来评估训练损失（例如，训练之后）。如果你发现模型过拟合，则可以提高dropout率。相反，如果模型欠拟合训练集，则应尝试降低dropout率。它还可以帮助增加较大层的dropout率，并减小较小层的dropout率。此外，许多最新的架构仅在最后一个隐藏层之后才使用dropout，因此如果完全dropout太强，你可以尝试一下此方法。
+
+dropout确实会明显减慢收敛速度，但是如果正确微调，通常会导致更好的模型。因此，花额外的时间和精力是值得的。
+
+如果要基于SELU激活函数（如前所述）对自归一化网络进行正则化，则应使用alpha dropout：这是dropout的一种变体，它保留了其输入的均值和标准差（在与SELU相同的论文中介绍，因为常规的dropout会破坏自归一化）。
+
+### 11.4.3 蒙特卡罗（MC）Dropout
+
+P356
