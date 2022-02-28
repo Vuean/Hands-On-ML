@@ -91,4 +91,36 @@ TensorFlow的API一切都围绕张量，张量从一个操作流向另一个操�
     >>> <tf.Tensor: shape=(2, 3), dtype=float32, numpy=
     array([[11., 12., 13.],
         [14., 15., 16.]], dtype=float32)>
+    
+    tf.square(t)
+    >>> <tf.Tensor: shape=(2, 3), dtype=float32, numpy=
+    array([[ 1.,  4.,  9.],
+        [16., 25., 36.]], dtype=float32)>
+
+    t @ tf.transpose(t)
+    >>> <tf.Tensor: shape=(2, 2), dtype=float32, numpy=
+    array([[14., 32.],
+        [32., 77.]], dtype=float32)>
 ```
+
+请注意，t+10等效于调用`tf.add(t,10)`（实际上，Python调用了方法`t.__add__(10)`，该方法仅调用`tf.add(t,10)`）。还支持其他运算符，例如-和*。@运算符是在Python 3.5中添加的，用于矩阵乘法，等效于调用`tf.matmul()`函数。
+
+可以找到所需的所有基本数学运算（`tf.add()`、`tf.multiply()`、`tf.square()`、`tf.exp()`、`tf.sqrt()`等）以及在NumPy找到的大多数运算（例如`tf.reshape()`、`tf.squeeze()`、`tf.tile()`）。某些函数的名称与NumPy中的名称不同。例如，`tf.reduce_mean()`、`tf.reduce_sum()`、`tf.reduce_max()`和`tf.math.log()`等效于`np.mean()`、`np.sum()`、`np.max()`和`np.log()`。名称不同时，通常有充分的理由。例如，在TensorFlow中，你必须编写`tf.transpose(t)`，不能就像在NumPy中一样只是写`t.T`。原因是`tf.transpose()`函数与NumPy的T属性没有完全相同的功能：在TensorFlow中，使用自己的转置数据副本创建一个新的张量，而在NumPy中，`t.T`只是相同数据的转置视图。类似地，`tf.reduce_sum()`操作之所以这样命名，是因为其GPU内核（即GPU实现）使用的reduce算法不能保证元素添加的顺序：因为32位浮点数的精度有限，因此每次你调用此操作时，结果可能会稍有不同。`tf.reduce_mean()`也是如此（当然`tf.reduce_max()`是确定性的）。
+
+许多函数和类都有别名。例如，`tf.add()`和`tf.math.add()`是同一函数。这使得TensorFlow可以为最常见的操作使用简洁的名称，同时保留组织良好的软件包。
+
+#### Keras的底层API
+
+Keras API在keras.backend中有自己的底层API。它包含诸如`square()`、`exp()`和`sqrt()`等函数。在tf.keras中，这些函数通常只调用相应的TensorFlow操作。如果要编写可移植到其他Keras实现中的代码，则应使用这些Keras函数。但是它们仅涵盖TensorFlow中所有可用函数的子集，因此在本书中，我们直接使用TensorFlow操作。这是使用keras.backend的简单示例，它通常简称为K：
+
+```python
+    from tensorflow import keras
+    K = keras.backend
+    K.square(K.transpose(t)) + 10
+    >>> <tf.Tensor: shape=(3, 2), dtype=float32, numpy=
+    array([[11., 26.],
+        [14., 35.],
+        [19., 46.]], dtype=float32)>
+```
+
+### 12.2.2 张量和NumPy
