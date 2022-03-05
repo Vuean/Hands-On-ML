@@ -124,3 +124,112 @@ Keras API在keras.backend中有自己的底层API。它包含诸如`square()`、
 ```
 
 ### 12.2.2 张量和NumPy
+
+张量可以与NumPy配合使用：可以用NumPy数组创建张量，反之亦然。甚至还可以将TensorFlow操作应用于NumPy数组，将NumPy操作应用于张量：
+
+```python
+    a = np.array([2., 4., 5.])
+    tf.constant(a)
+    >>> <tf.Tensor: shape=(3,), dtype=float64, numpy=array([2., 4., 5.])>
+
+    t.numpy()
+    >>> array([[1., 2., 3.],
+       [4., 5., 6.]], dtype=float32)
+
+    np.array(t)
+    >>> array([[1., 2., 3.],
+       [4., 5., 6.]], dtype=float32)
+    
+    tf.square(a)
+    >>> <tf.Tensor: shape=(3,), dtype=float64, numpy=array([ 4., 16., 25.])>
+
+    np.square(t)
+    >>> array([[ 1.,  4.,  9.],
+       [16., 25., 36.]], dtype=float32)
+```
+
+请注意，默认情况下NumPy使用64位精度，而TensorFlow使用32位精度。这是因为32位精度通常对于神经网络来说绰绰有余，而且运行速度更快且使用的RAM更少。因此，当从NumPy数组创建张量时，需确保设置dtype=tf.float32。
+
+### 12.2.3 类型转换
+
+类型转换会严重影响性能，并且自动完成转换很容易被忽视。为了避免这种情况，TensorFlow不会自动执行任何类型转换：如果对不兼容类型的张量执行操作，会引发异常。例如，不能把浮点张量和整数张量相加，甚至不能相加32位浮点和64位浮点：
+
+```python
+    try:
+        tf.constant(2.0) + tf.constant(40)
+    except tf.errors.InvalidArgumentError as ex:
+        print(ex)
+    >>> cannot compute AddV2 as input #1(zero-based) was expected to be a float tensor but is a int32 tensor [Op:AddV2]
+
+    try:
+        tf.constant(2.0) + tf.constant(40., dtype=tf.float64)
+    except tf.errors.InvalidArgumentError as ex:
+        print(ex)
+    >>> cannot compute AddV2 as input #1(zero-based) was expected to be a float tensor but is a double tensor [Op:AddV2]
+```
+
+虽然该规则会有点烦人，但是这是必须的！当确实需要转换类型时，可以使用`tf.cast()`：
+
+```python
+    t2 = tf.constant(40., dtype=tf.float64)
+    tf.constant(2.0) + tf.cast(t2, tf.float32)
+    >>> <tf.Tensor: shape=(), dtype=float32, numpy=42.0>
+```
+
+### 12.2.4 变量
+
+到目前为止，接触的tf.Tensor值是不变的，无法修改它们。这意味着当前还不能使用常规张量在神经网络中实现权重，因为它们需要通过反向传播进行调整。另外还可能需要随时间改变其他参数（例如动量优化器跟踪过去的梯度）。因此需要的是`tf.Variable`：
+
+```python
+    v = tf.Variable([[1., 2., 3.], [4., 5., 6.]])
+    v
+    >>> <tf.Variable 'Variable:0' shape=(2, 3) dtype=float32, numpy=
+    array([[1., 2., 3.],
+        [4., 5., 6.]], dtype=float32)>
+```
+
+`tf.Variable`的行为与`tf.Tensor`的行为非常相似：可以使用它执行相同的操作，它在NumPy中也可以很好地发挥作用，并且对类型也很挑剔。但是也可以使用`assign()`方法（或`assign_add()`或`assign_sub()`，给变量增加或减少给定值）进行修改。还可以通过使用单元（或切片）的`assign()`方法（直接指定将不起作用）或使用`scatter_update()`或`scatter_nd_update()`方法来修改单个单元（或切片）：
+
+```python
+    v.assign(2 * v)
+    v[0, 1].assign(42)
+    v[:, 2].assign([0., 1.])
+```
+
+实际上，你几乎不需要手动创建变量，因为Keras提供了`add_weight()`方法，我们将看到该方法会为你解决这个问题。而且模型参数通常由优化器直接更新，因此你几乎不需要手动更新变量。
+
+### 12.2.5 其他数据结构
+
+TensorFlow支持其他几种数据结构，包括以下内容：
+
+- 稀疏张量（tf.SparseTensor）
+
+    有效地表示主要包含零的张量。tf.sparse程序包包含稀疏张量的操作。
+
+- 张量数组（tf.TensorArray）
+
+    张量的列表。默认情况下，它们的大小是固定的，但可以选择动态设置。它们包含的所有张量必须具有相同的形状和数据类型。
+
+- 不规则张量（tf.RaggedTensor）
+
+    表示张量列表的静态列表，其中每个张量具有相同的形状和数据类型。tf.ragged程序包包含用于不规则的张量的操作。
+
+- 字符串张量
+    tf.string类型的常规张量。它们表示字节字符串，而不是Unicode字符串，因此如果使用Unicode字符串（常规的Python 3字符串，例如"café"）创建字符串张量，则它将自动被编码为UTF-8（例如，b"caf\xc3\xa9"）。或者，你可以使用类型为tf.int32的张量来表示Unicode字符串，其中每个项都表示一个Unicode代码点（例如[99、97、102、233]）。tf.strings包（带有s）包含用于字节字符串和Unicode字符串的操作（并将它们转换为另一个）。重要的是要注意，tf.string是原子级的，这意味着它的长度不会出现在张量的形状中。一旦你将其转换为Unicode张量（即包含Unicode代码点的tf.int32类型的张量）后，长度就会显示在形状中。
+
+- 集合
+
+    表示为常规张量（或稀疏张量）。例如，tf.constant（[[[1，2]，[3，4]]）代表两个集合{1，2}和{3，4}。通常，每个集合由张量的最后一个轴上的向量表示。可使用tf.sets包中的操作来操作集。
+
+- 队列
+
+    跨多个步骤存储的张量。TensorFlow提供了各种队列：简单的先进先出（FIFO）队列（FIFOQueue），可以区分某些元素优先级的队列（PriorityQueue），将其元素（RandomShuffleQueue）随机排序，通过填充（PaddingFIFOQueue）批处理具有不同形状的元素。这些类都在tf.queue包中。
+
+有了张量-运算-变量和各种数据结构，你现在就可以自定义模型和训练算法了！
+
+## 12.3 定制模型和训练算法
+
+从创建一个自定义损失函数开始，这是一个简单而常见的用例。
+
+### 12.3.1 自定义损失函数
+
